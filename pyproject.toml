@@ -1,0 +1,10 @@
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+  "integration: integration tests requiring a real MA server instance",
+]
+filterwarnings = [
+  # Suppress Python 3.13 AsyncMock internal warnings about unawaited coroutines
+  "ignore:coroutine.*was never awaited:RuntimeWarning",
+]
