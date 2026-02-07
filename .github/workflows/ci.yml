@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: trudenboy/ma-server
+          ref: dev
+          path: ma-server
+      - uses: astral-sh/setup-uv@v5
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+      - name: Install dependencies
+        working-directory: ma-server
+        run: |
+          uv venv .venv --python ${{ matrix.python-version }}
+          source .venv/bin/activate
+          uv pip install -e "."
+          uv pip install -e ".[test]"
+      - name: Symlink provider
+        run: |
+          ln -s "$GITHUB_WORKSPACE/provider/msx_bridge" \
+                "$GITHUB_WORKSPACE/ma-server/music_assistant/providers/msx_bridge"
+      - name: Verify imports
+        run: |
+          source ma-server/.venv/bin/activate
+          python -c "from music_assistant.providers.msx_bridge import setup; print('OK')"
+      - name: Run unit tests
+        run: |
+          source ma-server/.venv/bin/activate
+          pytest tests/ -v --ignore=tests/integration --tb=short -p no:cacheprovider
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: trudenboy/ma-server
+          ref: dev
+          path: ma-server
+      - uses: astral-sh/setup-uv@v5
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install dependencies
+        working-directory: ma-server
+        run: |
+          uv venv .venv --python 3.12
+          source .venv/bin/activate
+          uv pip install -e "."
+          uv pip install -e ".[test]"
+      - name: Symlink provider
+        run: |
+          ln -s "$GITHUB_WORKSPACE/provider/msx_bridge" \
+                "$GITHUB_WORKSPACE/ma-server/music_assistant/providers/msx_bridge"
+      - name: Lint
+        run: |
+          source ma-server/.venv/bin/activate
+          ruff check provider/ tests/
+          ruff format --check provider/ tests/
