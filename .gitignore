@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+ENV/
+
+# Node/TypeScript
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+coverage/
+.coverage
+htmlcov/
+
+# Docker
+*.tar
+
+# Secrets
+*.pem
+*.key
+secrets.yaml
+
+# Build artifacts
+*.build
+.buildx-cache/
+
+# Environment
+.env
+.env.local
