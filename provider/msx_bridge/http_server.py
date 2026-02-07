@@ -35,9 +35,7 @@ class MSXHTTPServer:
         self.app.router.add_get("/", self._handle_root)
         self.app.router.add_get("/msx/start.json", self._handle_start_json)
         self.app.router.add_get("/msx/plugin.html", self._handle_plugin_html)
-        self.app.router.add_get(
-            "/msx/tvx-plugin-module.min.js", self._handle_tvx_lib
-        )
+        self.app.router.add_get("/msx/tvx-plugin-module.min.js", self._handle_tvx_lib)
 
         # MSX content pages (native MSX JSON navigation)
         self.app.router.add_get("/msx/menu.json", self._handle_msx_menu)
@@ -69,11 +67,17 @@ class MSXHTTPServer:
 
         # Library API
         self.app.router.add_get("/api/albums", self._handle_albums)
-        self.app.router.add_get("/api/albums/{item_id}/tracks", self._handle_album_tracks)
+        self.app.router.add_get(
+            "/api/albums/{item_id}/tracks", self._handle_album_tracks
+        )
         self.app.router.add_get("/api/artists", self._handle_artists)
-        self.app.router.add_get("/api/artists/{item_id}/albums", self._handle_artist_albums)
+        self.app.router.add_get(
+            "/api/artists/{item_id}/albums", self._handle_artist_albums
+        )
         self.app.router.add_get("/api/playlists", self._handle_playlists)
-        self.app.router.add_get("/api/playlists/{item_id}/tracks", self._handle_playlist_tracks)
+        self.app.router.add_get(
+            "/api/playlists/{item_id}/tracks", self._handle_playlist_tracks
+        )
         self.app.router.add_get("/api/tracks", self._handle_tracks)
         self.app.router.add_get("/api/search", self._handle_search)
         self.app.router.add_get("/api/recently-played", self._handle_recently_played)
@@ -205,7 +209,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
     async def _handle_tvx_lib(self, request: web.Request) -> web.Response:
         """Serve the TVX plugin module library."""
         lib_path = STATIC_DIR / "tvx-plugin-module.min.js"
-        return web.FileResponse(lib_path, headers={"Content-Type": "application/javascript"})
+        return web.FileResponse(
+            lib_path, headers={"Content-Type": "application/javascript"}
+        )
 
     # --- MSX Content Pages (native MSX JSON) ---
 
@@ -481,7 +487,10 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         item_id = request.match_info["item_id"]
         try:
             tracks = [
-                t async for t in self.provider.mass.music.playlists.tracks(item_id, "library")
+                t
+                async for t in self.provider.mass.music.playlists.tracks(
+                    item_id, "library"
+                )
             ]
         except Exception:
             logger.warning("Failed to fetch tracks for playlist %s", item_id)
@@ -723,7 +732,10 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
     async def _handle_playlist_tracks(self, request: web.Request) -> web.Response:
         """List tracks for a playlist."""
         item_id = request.match_info["item_id"]
-        tracks = [t async for t in self.provider.mass.music.playlists.tracks(item_id, "library")]
+        tracks = [
+            t
+            async for t in self.provider.mass.music.playlists.tracks(item_id, "library")
+        ]
         return web.json_response(
             {
                 "items": [self._format_track(track) for track in tracks],
@@ -748,7 +760,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         """Search the music library."""
         query = request.query.get("q", "")
         if not query:
-            return web.json_response({"error": "Missing query parameter 'q'"}, status=400)
+            return web.json_response(
+                {"error": "Missing query parameter 'q'"}, status=400
+            )
         limit = int(request.query.get("limit", "20"))
         results = await self.provider.mass.music.search(query, limit=limit)
         return web.json_response(

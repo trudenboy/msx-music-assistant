@@ -13,7 +13,12 @@ from typing import TYPE_CHECKING
 from music_assistant_models.config_entries import ConfigEntry
 from music_assistant_models.enums import ConfigEntryType
 
-from .constants import CONF_HTTP_PORT, CONF_OUTPUT_FORMAT, DEFAULT_HTTP_PORT, DEFAULT_OUTPUT_FORMAT
+from .constants import (
+    CONF_HTTP_PORT,
+    CONF_OUTPUT_FORMAT,
+    DEFAULT_HTTP_PORT,
+    DEFAULT_OUTPUT_FORMAT,
+)
 from .provider import MSXBridgeProvider
 
 if TYPE_CHECKING:

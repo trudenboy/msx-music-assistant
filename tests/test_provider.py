@@ -31,9 +31,11 @@ async def test_handle_async_init_default_port(
     config.instance_id = "msx_bridge_test"
     config.enabled = True
     # Return None for http_port — provider should fall back to default
-    config.get_value = Mock(side_effect=lambda key, default=None: {
-        "log_level": "GLOBAL",
-    }.get(key, default))
+    config.get_value = Mock(
+        side_effect=lambda key, default=None: {
+            "log_level": "GLOBAL",
+        }.get(key, default)
+    )
 
     prov = MSXBridgeProvider(mass_mock, manifest_mock, config, set())
 
@@ -52,9 +54,7 @@ async def test_handle_async_init_default_port(
 
 async def test_loaded_in_mass_registers_player(provider: MSXBridgeProvider) -> None:
     """loaded_in_mass should create and register the default MSX player."""
-    with patch(
-        "music_assistant.providers.msx_bridge.provider.MSXPlayer"
-    ) as MockPlayer:
+    with patch("music_assistant.providers.msx_bridge.provider.MSXPlayer") as MockPlayer:
         mock_player = Mock()
         MockPlayer.return_value = mock_player
 

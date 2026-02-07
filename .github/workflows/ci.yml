@@ -29,14 +29,11 @@ jobs:
           source .venv/bin/activate
           uv pip install -e "."
           uv pip install -e ".[test]"
+          uv pip install -r requirements_all.txt
       - name: Symlink provider
         run: |
           ln -s "$GITHUB_WORKSPACE/provider/msx_bridge" \
                 "$GITHUB_WORKSPACE/ma-server/music_assistant/providers/msx_bridge"
-      - name: Verify imports
-        run: |
-          source ma-server/.venv/bin/activate
-          python -c "from music_assistant.providers.msx_bridge import setup; print('OK')"
       - name: Run unit tests
         run: |
           source ma-server/.venv/bin/activate
@@ -63,6 +60,7 @@ jobs:
           source .venv/bin/activate
           uv pip install -e "."
           uv pip install -e ".[test]"
+          uv pip install -r requirements_all.txt
       - name: Symlink provider
         run: |
           ln -s "$GITHUB_WORKSPACE/provider/msx_bridge" \

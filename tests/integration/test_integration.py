@@ -32,18 +32,14 @@ async def test_provider_discovered_by_manifest(mass: MusicAssistant) -> None:
     assert manifest.type.value == "player"
 
 
-async def test_provider_loads_successfully(
-    mass: MusicAssistant, msx_provider
-) -> None:
+async def test_provider_loads_successfully(mass: MusicAssistant, msx_provider) -> None:
     """Provider is loaded and available after save_provider_config."""
     provider = mass.get_provider("msx_bridge")
     assert provider is not None
     assert provider.available
 
 
-async def test_provider_unload_cleans_up(
-    mass: MusicAssistant, msx_port: int
-) -> None:
+async def test_provider_unload_cleans_up(mass: MusicAssistant, msx_port: int) -> None:
     """After removal: provider gone, player gone, port freed."""
     from tests.integration.conftest import _wait_for_player
 
@@ -77,9 +73,7 @@ async def test_provider_unload_cleans_up(
 # ---------------------------------------------------------------------------
 
 
-async def test_default_player_registered(
-    mass: MusicAssistant, msx_provider
-) -> None:
+async def test_default_player_registered(mass: MusicAssistant, msx_provider) -> None:
     """Default player is registered with expected attributes."""
     player = mass.players.get("msx_default")
     assert player is not None
@@ -89,9 +83,7 @@ async def test_default_player_registered(
     assert PlayerFeature.VOLUME_SET in player.supported_features
 
 
-async def test_player_initial_state(
-    mass: MusicAssistant, msx_provider
-) -> None:
+async def test_player_initial_state(mass: MusicAssistant, msx_provider) -> None:
     """Player starts in IDLE with volume 100."""
     player = mass.players.get("msx_default")
     assert player is not None
@@ -237,9 +229,7 @@ async def test_api_search_empty(
 # ---------------------------------------------------------------------------
 
 
-async def test_play_media_stores_stream_url(
-    mass: MusicAssistant, msx_provider
-) -> None:
+async def test_play_media_stores_stream_url(mass: MusicAssistant, msx_provider) -> None:
     """play_media() stores the stream URL and sets state to PLAYING."""
     player = mass.players.get("msx_default")
     assert isinstance(player, MSXPlayer)
@@ -250,9 +240,7 @@ async def test_play_media_stores_stream_url(
     assert player.playback_state == PlaybackState.PLAYING
 
 
-async def test_stop_clears_stream_url(
-    mass: MusicAssistant, msx_provider
-) -> None:
+async def test_stop_clears_stream_url(mass: MusicAssistant, msx_provider) -> None:
     """stop() clears stream URL and sets state to IDLE."""
     player = mass.players.get("msx_default")
     assert isinstance(player, MSXPlayer)

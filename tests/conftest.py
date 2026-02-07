@@ -56,9 +56,9 @@ def mass_mock(player_config_mock: Mock) -> Mock:
     mass.music.playlists.library_items = AsyncMock(return_value=[])
     mass.music.playlists.tracks = Mock(side_effect=lambda *a, **k: _empty_async_gen())
     mass.music.tracks.library_items = AsyncMock(return_value=[])
-    mass.music.search = AsyncMock(return_value=Mock(
-        artists=[], albums=[], tracks=[], playlists=[]
-    ))
+    mass.music.search = AsyncMock(
+        return_value=Mock(artists=[], albums=[], tracks=[], playlists=[])
+    )
 
     # Playback control
     mass.player_queues.play_media = AsyncMock()
@@ -95,16 +95,20 @@ def config_mock() -> Mock:
     config.name = "MSX Bridge"
     config.instance_id = "msx_bridge_test"
     config.enabled = True
-    config.get_value = Mock(side_effect=lambda key, default=None: {
-        "http_port": 8099,
-        "output_format": "mp3",
-        "log_level": "GLOBAL",
-    }.get(key, default))
+    config.get_value = Mock(
+        side_effect=lambda key, default=None: {
+            "http_port": 8099,
+            "output_format": "mp3",
+            "log_level": "GLOBAL",
+        }.get(key, default)
+    )
     return config
 
 
 @pytest.fixture
-def provider(mass_mock: Mock, manifest_mock: Mock, config_mock: Mock) -> MSXBridgeProvider:
+def provider(
+    mass_mock: Mock, manifest_mock: Mock, config_mock: Mock
+) -> MSXBridgeProvider:
     """Return an MSXBridgeProvider instance without a real HTTP server."""
     prov = MSXBridgeProvider(mass_mock, manifest_mock, config_mock, set())
     prov.http_server = None

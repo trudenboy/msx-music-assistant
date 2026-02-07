@@ -74,9 +74,7 @@ async def test_stream_player_not_found(http_client: TestClient) -> None:
     assert resp.status == 404
 
 
-async def test_stream_no_url(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_stream_no_url(provider: object, mass_mock: Mock) -> None:
     """GET /stream/{id} should return 404 when player has no stream URL."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -98,9 +96,7 @@ async def test_stream_no_url(
         await client.close()
 
 
-async def test_stream_not_msx_player(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_stream_not_msx_player(provider: object, mass_mock: Mock) -> None:
     """GET /stream/{id} should return 400 for a non-MSX player."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -122,9 +118,7 @@ async def test_stream_not_msx_player(
         await client.close()
 
 
-async def test_stream_success(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_stream_success(provider: object, mass_mock: Mock) -> None:
     """GET /stream/{id} should proxy bytes from upstream when player has a stream URL."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -142,9 +136,7 @@ async def test_stream_success(
         # Mock the ClientSession used for upstream proxy
         mock_upstream_resp = AsyncMock()
         chunks = [b"audio-chunk-1", b"audio-chunk-2"]
-        mock_upstream_resp.content.iter_chunked = Mock(
-            return_value=_async_iter(chunks)
-        )
+        mock_upstream_resp.content.iter_chunked = Mock(return_value=_async_iter(chunks))
         mock_session = AsyncMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
@@ -176,9 +168,7 @@ async def test_albums(http_client: TestClient) -> None:
     assert "total" in data
 
 
-async def test_albums_with_data(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_albums_with_data(provider: object, mass_mock: Mock) -> None:
     """GET /api/albums should format album data correctly."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -245,9 +235,7 @@ async def test_tracks(http_client: TestClient) -> None:
     assert "total" in data
 
 
-async def test_search(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_search(provider: object, mass_mock: Mock) -> None:
     """GET /api/search?q=test should return search results."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -280,9 +268,7 @@ async def test_search_missing_query(http_client: TestClient) -> None:
 # --- Playback control ---
 
 
-async def test_play_track(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_play_track(provider: object, mass_mock: Mock) -> None:
     """POST /api/play should call player_queues.play_media."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -316,9 +302,7 @@ async def test_play_invalid_body(http_client: TestClient) -> None:
     assert resp.status == 400
 
 
-async def test_pause(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_pause(provider: object, mass_mock: Mock) -> None:
     """POST /api/pause/{id} should call cmd_pause."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -335,9 +319,7 @@ async def test_pause(
         await client.close()
 
 
-async def test_stop(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_stop(provider: object, mass_mock: Mock) -> None:
     """POST /api/stop/{id} should call cmd_stop."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -401,9 +383,7 @@ def _make_playlist_mock(item_id: int = 1, name: str = "Test Playlist") -> Mock:
     return playlist
 
 
-async def test_msx_albums_have_action(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_msx_albums_have_action(provider: object, mass_mock: Mock) -> None:
     """GET /msx/albums.json items should have content: action for drill-down."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -429,9 +409,7 @@ async def test_msx_albums_have_action(
         await client.close()
 
 
-async def test_msx_artists_have_action(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_msx_artists_have_action(provider: object, mass_mock: Mock) -> None:
     """GET /msx/artists.json items should have content: action for drill-down."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -457,9 +435,7 @@ async def test_msx_artists_have_action(
         await client.close()
 
 
-async def test_msx_playlists_have_action(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_msx_playlists_have_action(provider: object, mass_mock: Mock) -> None:
     """GET /msx/playlists.json items should have content: action for drill-down."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -485,9 +461,7 @@ async def test_msx_playlists_have_action(
         await client.close()
 
 
-async def test_msx_tracks_have_action(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_msx_tracks_have_action(provider: object, mass_mock: Mock) -> None:
     """GET /msx/tracks.json items should have audio: action for playback."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -519,9 +493,7 @@ async def test_msx_tracks_have_action(
 # --- MSX detail pages ---
 
 
-async def test_msx_album_tracks(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_msx_album_tracks(provider: object, mass_mock: Mock) -> None:
     """GET /msx/albums/{id}/tracks.json should return tracks with audio actions."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -547,9 +519,7 @@ async def test_msx_album_tracks(
         await client.close()
 
 
-async def test_msx_artist_albums(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_msx_artist_albums(provider: object, mass_mock: Mock) -> None:
     """GET /msx/artists/{id}/albums.json should return albums with content actions."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -575,9 +545,7 @@ async def test_msx_artist_albums(
         await client.close()
 
 
-async def test_msx_playlist_tracks(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_msx_playlist_tracks(provider: object, mass_mock: Mock) -> None:
     """GET /msx/playlists/{id}/tracks.json should return tracks with audio actions."""
     from aiohttp.test_utils import TestClient, TestServer
 
@@ -588,7 +556,9 @@ async def test_msx_playlist_tracks(
     async def _mock_playlist_tracks(*args, **kwargs):
         yield track
 
-    mass_mock.music.playlists.tracks = Mock(side_effect=lambda *a, **k: _mock_playlist_tracks())
+    mass_mock.music.playlists.tracks = Mock(
+        side_effect=lambda *a, **k: _mock_playlist_tracks()
+    )
 
     server = MSXHTTPServer(provider, 0)
     client = TestClient(TestServer(server.app))
@@ -623,9 +593,7 @@ async def test_msx_audio_player_not_found(http_client: TestClient) -> None:
     assert resp.status == 404
 
 
-async def test_msx_audio_not_msx_player(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_msx_audio_not_msx_player(provider: object, mass_mock: Mock) -> None:
     """GET /msx/audio/{id}?uri=x should return 400 for non-MSX player."""
     from aiohttp.test_utils import TestClient, TestServer
 

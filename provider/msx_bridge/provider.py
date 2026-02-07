@@ -6,7 +6,12 @@ from typing import cast
 
 from music_assistant.models.player_provider import PlayerProvider
 
-from .constants import CONF_HTTP_PORT, CONF_OUTPUT_FORMAT, DEFAULT_HTTP_PORT, DEFAULT_OUTPUT_FORMAT
+from .constants import (
+    CONF_HTTP_PORT,
+    CONF_OUTPUT_FORMAT,
+    DEFAULT_HTTP_PORT,
+    DEFAULT_OUTPUT_FORMAT,
+)
 from .http_server import MSXHTTPServer
 from .player import MSXPlayer
 
@@ -24,7 +29,9 @@ class MSXBridgeProvider(PlayerProvider):
         port = cast("int", self.config.get_value(CONF_HTTP_PORT, DEFAULT_HTTP_PORT))
         self.http_server = MSXHTTPServer(self, port)
         await self.http_server.start()
-        self.logger.info("MSX Bridge provider initialized, HTTP server on port %s", port)
+        self.logger.info(
+            "MSX Bridge provider initialized, HTTP server on port %s", port
+        )
 
     async def loaded_in_mass(self) -> None:
         """Register the default MSX player after provider is loaded."""

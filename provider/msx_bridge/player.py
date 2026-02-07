@@ -56,9 +56,7 @@ class MSXPlayer(Player):
 
     async def play_media(self, media: PlayerMedia) -> None:
         """Handle PLAY MEDIA command — store stream URL for the TV to fetch."""
-        self.logger.info(
-            "play_media on %s: uri=%s", self.display_name, media.uri
-        )
+        self.logger.info("play_media on %s: uri=%s", self.display_name, media.uri)
         self.current_stream_url = media.uri
         self._attr_current_media = media
         self._attr_playback_state = PlaybackState.PLAYING
@@ -81,7 +79,9 @@ class MSXPlayer(Player):
             self._attr_elapsed_time is not None
             and self._attr_elapsed_time_last_updated is not None
         ):
-            self._attr_elapsed_time += time.time() - self._attr_elapsed_time_last_updated
+            self._attr_elapsed_time += (
+                time.time() - self._attr_elapsed_time_last_updated
+            )
         self._attr_playback_state = PlaybackState.PAUSED
         self._attr_elapsed_time_last_updated = time.time()
         self.update_state()
