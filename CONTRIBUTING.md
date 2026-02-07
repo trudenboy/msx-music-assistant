@@ -1,4 +1,4 @@
-# Contributing to MSX Music Assistant Integration
+# Contributing to MSX Music Assistant Bridge
 
 Thank you for your interest in contributing! This document provides guidelines and instructions.
 
@@ -14,8 +14,8 @@ Use GitHub Issues with the bug report template. Include:
 - Detailed description
 - Steps to reproduce
 - Expected vs actual behavior
-- Environment details (HA version, TV model, etc.)
-- Logs from addon and browser console
+- Environment details (MA version, TV model, MSX app version)
+- Logs from the MA server
 
 ### Suggesting Features
 
@@ -38,30 +38,45 @@ Use GitHub Issues with the feature request template. Explain:
 
 ## Development Setup
 
-See [DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed setup instructions.
+### Prerequisites
 
-Quick start:
+- Python 3.12+
+- [uv](https://github.com/astral-sh/uv) (used by MA for venv/dependency management)
+- MA server fork cloned alongside this project
+
+### Quick Start
+
 ```bash
-git clone https://github.com/your-username/msx-music-assistant
+git clone https://github.com/trudenboy/msx-music-assistant.git
 cd msx-music-assistant
-./scripts/setup-dev.sh
-./scripts/test-local.sh
+
+# Setup venv, install deps, symlink provider into MA server
+./scripts/link-to-ma.sh
+
+# Activate the MA venv (required for all commands)
+source /Users/renso/Projects/ma-server/.venv/bin/activate
 ```
+
+See [CLAUDE.md](CLAUDE.md) for detailed development guidance, architecture, and MA conventions.
 
 ## Coding Standards
 
-### Python (Addon)
-- Follow PEP 8
-- Use Black for formatting
-- Type hints for all functions
-- Docstrings for public APIs
-- Run `pylint` and `mypy` before commit
+### Python
 
-### TypeScript (Frontend)
-- Follow ESLint configuration
-- Use Prettier for formatting
-- Explicit types, avoid `any`
-- JSDoc comments for public APIs
+- Follow PEP 8
+- `from __future__ import annotations` at the top of every file
+- Type hints on all functions
+- All I/O uses async/await (aiohttp)
+- Follow patterns from MA reference providers (`_demo_player_provider`, `sendspin`)
+- Run pre-commit before committing:
+  ```bash
+  source /Users/renso/Projects/ma-server/.venv/bin/activate
+  cd /Users/renso/Projects/ma-server && pre-commit run --all-files
+  ```
+
+### TypeScript (future)
+
+The `frontend/` directory contains scaffolding for a full MSX TypeScript plugin. This is not yet active — the provider currently serves an inline JS interaction plugin. TypeScript guidelines will be added when this becomes active.
 
 ### Commit Messages
 
@@ -77,26 +92,31 @@ Types:
 - `chore`: Maintenance tasks
 
 Examples:
-- `feat(addon): add MP3 transcoding support`
-- `fix(frontend): resolve WebSocket reconnection issue`
-- `docs: update installation guide for Tizen`
+- `feat(provider): add search endpoint for MSX content pages`
+- `fix(player): correct elapsed time calculation on pause`
+- `docs: update README with architecture diagrams`
 
 ## Testing
 
-### Addon Tests
+All tests must run inside the MA venv:
+
 ```bash
-cd addon
-pytest tests/
+source /Users/renso/Projects/ma-server/.venv/bin/activate
 ```
 
-### Frontend Tests
+### Unit Tests
+
 ```bash
-cd frontend
-npm test
+pytest tests/ -v --ignore=tests/integration
 ```
 
-### Integration Testing
-Use `./scripts/test-local.sh` to run full stack locally.
+### Integration Tests
+
+Integration tests require a running MA server and are in `tests/integration/`:
+
+```bash
+pytest tests/integration/ -v
+```
 
 ## License
 

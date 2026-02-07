@@ -8,31 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial release
-- Home Assistant addon for stream proxy
-- MSX interaction plugin for TV interface
-- Automatic transcoding (FLAC→MP3)
-- WebSocket relay for MA API
-- Multi-architecture Docker support
-- Full library browsing (albums, artists, playlists)
-- Search functionality
-- Queue management
-- Now playing display
-
-### Changed
-- N/A
+- **Architecture pivot**: from standalone HA addon to MA Player Provider plugin
+- `MSXBridgeProvider` (PlayerProvider) with embedded aiohttp HTTP server
+- `MSXPlayer` (Player) with play, pause, stop, volume, and poll support
+- MSX interaction plugin (`plugin.html` + `tvx-plugin-module.min.js`) for sidebar menu
+- MSX native JSON content pages (albums, artists, playlists, tracks, search)
+- MSX detail pages (album tracks, artist albums, playlist tracks)
+- Audio playback endpoint (`/msx/audio/{player_id}`) with MA queue integration and stream proxy
+- Stream proxy (`/stream/{player_id}`) for direct audio proxying
+- Library REST API (`/api/albums`, `/api/artists`, `/api/playlists`, `/api/tracks`, `/api/search`, `/api/recently-played`)
+- Playback control API (`/api/play`, `/api/pause`, `/api/stop`, `/api/next`, `/api/previous`)
+- Status dashboard at root URL (`/`)
+- Health endpoint (`/health`)
+- CORS middleware for cross-origin MSX requests
+- Configurable HTTP port and audio output format (mp3/aac/flac)
+- `link-to-ma.sh` setup script (venv creation, dependency install, provider symlink)
+- 55 unit tests covering provider, player, HTTP server, and setup
+- Integration test suite (requires running MA server)
 
 ### Deprecated
-- N/A
-
-### Removed
-- N/A
-
-### Fixed
-- N/A
-
-### Security
-- N/A
+- `addon/` directory (original standalone HA addon approach, kept for reference)
 
 ## [1.0.0] - TBD
 
