@@ -199,16 +199,16 @@ The provider exposes two config entries in the MA UI:
 ./scripts/link-to-ma.sh
 
 # Activate venv (required for all commands)
-source /Users/renso/Projects/ma-server/.venv/bin/activate
+source ../ma-server/.venv/bin/activate
 
 # Start server
-cd /Users/renso/Projects/ma-server && python -m music_assistant --log-level debug
+cd ../ma-server && python -m music_assistant --log-level debug
 
 # Run tests
 pytest tests/ -v --ignore=tests/integration
 
 # Run linting
-cd /Users/renso/Projects/ma-server && pre-commit run --all-files
+cd ../ma-server && pre-commit run --all-files
 
 # Verify provider imports
 python -c "from music_assistant.providers.msx_bridge import setup; print('OK')"
@@ -239,9 +239,6 @@ tests/
 
 scripts/
 └── link-to-ma.sh      # Setup venv + symlink provider into MA server
-
-addon/                 # Legacy standalone HA addon (deprecated)
-frontend/              # MSX TypeScript plugin (scaffolding, not yet active)
 ```
 
 ## Contributing

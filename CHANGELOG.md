@@ -26,9 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 55 unit tests covering provider, player, HTTP server, and setup
 - Integration test suite (requires running MA server)
 
-### Deprecated
-- `addon/` directory (original standalone HA addon approach, kept for reference)
-
 ## [1.0.0] - TBD
 
 Initial release.

@@ -20,10 +20,6 @@ Smart TV (MSX App) --HTTP--> MSXBridgeProvider (inside MA, port 8099) --internal
 - `constants.py` — config keys and defaults
 - `manifest.json` — provider metadata for MA
 
-**Legacy addon** (`addon/`): Original standalone bridge approach (deprecated, kept for reference).
-
-**Frontend** (`frontend/`): MSX TypeScript plugin (scaffolding, not yet active). The provider currently serves an inline JS interaction plugin via `plugin.html`.
-
 ### Key Flows
 
 **MSX Bootstrap & Navigation:**
@@ -49,7 +45,7 @@ Smart TV (MSX App) --HTTP--> MSXBridgeProvider (inside MA, port 8099) --internal
 
 ```bash
 # Clone MA server fork alongside this project (if not already done)
-cd /Users/renso/Projects && git clone https://github.com/trudenboy/ma-server.git
+cd .. && git clone https://github.com/trudenboy/ma-server.git
 
 # Setup venv, install deps, symlink provider — one command does it all
 ./scripts/link-to-ma.sh
@@ -61,16 +57,16 @@ All commands (server, tests, pre-commit, linting) must run inside the MA venv:
 
 ```bash
 # Activate the venv
-source /Users/renso/Projects/ma-server/.venv/bin/activate
+source ../ma-server/.venv/bin/activate
 
 # Start MA server (provider auto-loads)
-cd /Users/renso/Projects/ma-server && python -m music_assistant --log-level debug
+cd ../ma-server && python -m music_assistant --log-level debug
 
 # Run tests
-cd /Users/renso/Projects/ma-server && pytest
+cd ../ma-server && pytest
 
 # Pre-commit (linting, formatting)
-cd /Users/renso/Projects/ma-server && pre-commit run --all-files
+cd ../ma-server && pre-commit run --all-files
 
 # Verify provider imports
 python -c "from music_assistant.providers.msx_bridge import setup; print('OK')"

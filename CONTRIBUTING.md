@@ -54,7 +54,7 @@ cd msx-music-assistant
 ./scripts/link-to-ma.sh
 
 # Activate the MA venv (required for all commands)
-source /Users/renso/Projects/ma-server/.venv/bin/activate
+source ../ma-server/.venv/bin/activate
 ```
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidance, architecture, and MA conventions.
@@ -70,13 +70,9 @@ See [CLAUDE.md](CLAUDE.md) for detailed development guidance, architecture, and 
 - Follow patterns from MA reference providers (`_demo_player_provider`, `sendspin`)
 - Run pre-commit before committing:
   ```bash
-  source /Users/renso/Projects/ma-server/.venv/bin/activate
-  cd /Users/renso/Projects/ma-server && pre-commit run --all-files
+  source ../ma-server/.venv/bin/activate
+  cd ../ma-server && pre-commit run --all-files
   ```
-
-### TypeScript (future)
-
-The `frontend/` directory contains scaffolding for a full MSX TypeScript plugin. This is not yet active — the provider currently serves an inline JS interaction plugin. TypeScript guidelines will be added when this becomes active.
 
 ### Commit Messages
 
@@ -101,7 +97,7 @@ Examples:
 All tests must run inside the MA venv:
 
 ```bash
-source /Users/renso/Projects/ma-server/.venv/bin/activate
+source ../ma-server/.venv/bin/activate
 ```
 
 ### Unit Tests
