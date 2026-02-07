@@ -8,7 +8,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
-from aiohttp import ClientSession, web
+from aiohttp import web
+from music_assistant_models.enums import ContentType
+from music_assistant_models.media_items import AudioFormat
+
+from music_assistant.helpers.ffmpeg import get_ffmpeg_stream
 
 if TYPE_CHECKING:
     from .provider import MSXBridgeProvider
@@ -36,6 +40,9 @@ class MSXHTTPServer:
         self.app.router.add_get("/msx/start.json", self._handle_start_json)
         self.app.router.add_get("/msx/plugin.html", self._handle_plugin_html)
         self.app.router.add_get("/msx/tvx-plugin-module.min.js", self._handle_tvx_lib)
+        self.app.router.add_get("/msx/tvx-plugin.min.js", self._handle_tvx_plugin_lib)
+        self.app.router.add_get("/msx/input.html", self._handle_input_html)
+        self.app.router.add_get("/msx/input.js", self._handle_input_js)
 
         # MSX content pages (native MSX JSON navigation)
         self.app.router.add_get("/msx/menu.json", self._handle_msx_menu)
@@ -43,7 +50,10 @@ class MSXHTTPServer:
         self.app.router.add_get("/msx/artists.json", self._handle_msx_artists)
         self.app.router.add_get("/msx/playlists.json", self._handle_msx_playlists)
         self.app.router.add_get("/msx/tracks.json", self._handle_msx_tracks)
+        self.app.router.add_get("/msx/search-launch.json", self._handle_msx_search_launch)
+        self.app.router.add_get("/msx/search-input.json", self._handle_msx_search_input)
         self.app.router.add_get("/msx/search.json", self._handle_msx_search)
+        self.app.router.add_post("/msx/search", self._handle_msx_search_execute)
 
         # MSX detail pages
         self.app.router.add_get(
@@ -213,6 +223,36 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             lib_path, headers={"Content-Type": "application/javascript"}
         )
 
+    async def _handle_tvx_plugin_lib(self, request: web.Request) -> web.Response:
+        """Serve the TVX plugin library (non-module version for input.html)."""
+        return web.FileResponse(
+            STATIC_DIR / "tvx-plugin.min.js",
+            headers={"Content-Type": "application/javascript"},
+        )
+
+    async def _handle_input_html(self, request: web.Request) -> web.Response:
+        """Serve the MSX Input Plugin HTML (local copy)."""
+        prefix = f"http://{request.host}"
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Input Interaction Plugin</title>
+    <meta charset="UTF-8" />
+    <script type="text/javascript" src="{prefix}/msx/tvx-plugin.min.js"></script>
+    <script type="text/javascript" src="{prefix}/msx/input.js"></script>
+</head>
+<body>
+</body>
+</html>"""
+        return web.Response(text=html, content_type="text/html")
+
+    async def _handle_input_js(self, request: web.Request) -> web.Response:
+        """Serve the MSX Input Plugin JavaScript."""
+        return web.FileResponse(
+            STATIC_DIR / "input.js",
+            headers={"Content-Type": "application/javascript"},
+        )
+
     # --- MSX Content Pages (native MSX JSON) ---
 
     async def _handle_msx_menu(self, request: web.Request) -> web.Response:
@@ -370,6 +410,75 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             }
         )
 
+    async def _handle_msx_search_launch(self, request: web.Request) -> web.Response:
+        """Return an action that launches the Input Plugin search keyboard."""
+        prefix = f"http://{request.host}"
+        action = (
+            f"content:request:interaction:"
+            f"{prefix}/msx/search-input.json?q={{INPUT}}"
+            f"|search:3|en|Search Music||||Search..."
+            f"@{prefix}/msx/input.html"
+        )
+        return web.json_response({"action": action})
+
+    async def _handle_msx_search_input(self, request: web.Request) -> web.Response:
+        """Return search results for the MSX Input Plugin (search keyboard)."""
+        prefix = f"http://{request.host}"
+        query = request.query.get("q", "")
+        if not query:
+            return web.json_response(
+                {
+                    "headline": "{ico:search} Search",
+                    "hint": "Type to search...",
+                    "template": {
+                        "type": "separate",
+                        "layout": "0,0,2,4",
+                        "imageFiller": "default",
+                    },
+                    "items": [{"title": "Start typing to search"}],
+                }
+            )
+        limit = int(request.query.get("limit", "20"))
+        results = await self.provider.mass.music.search(query, limit=limit)
+        items = []
+        for artist in results.artists:
+            items.append(
+                {
+                    "title": artist.name,
+                    "label": "Artist",
+                    "icon": "msx-white-soft:person",
+                    "image": self._get_image_url(artist),
+                    "action": f"content:{prefix}/msx/artists/{artist.item_id}/albums.json",
+                }
+            )
+        for album in results.albums:
+            items.append(
+                {
+                    "title": album.name,
+                    "label": f"Album — {getattr(album, 'artist_str', '')}",
+                    "icon": "msx-white-soft:album",
+                    "image": self._get_image_url(album),
+                    "action": f"content:{prefix}/msx/albums/{album.item_id}/tracks.json",
+                }
+            )
+        for track in results.tracks:
+            item = self._format_msx_track(track, prefix)
+            item["label"] = f"Track — {getattr(track, 'artist_str', '')}"
+            item["icon"] = "msx-white-soft:audiotrack"
+            items.append(item)
+        return web.json_response(
+            {
+                "headline": f"{{ico:search}} \"{query}\"",
+                "hint": f"Found {len(items)} items",
+                "template": {
+                    "type": "separate",
+                    "layout": "0,0,2,4",
+                    "imageFiller": "default",
+                },
+                "items": items if items else [{"title": "No results found"}],
+            }
+        )
+
     async def _handle_msx_search(self, request: web.Request) -> web.Response:
         """Return search results as an MSX content page."""
         prefix = f"http://{request.host}"
@@ -421,6 +530,22 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                 },
                 "items": items if items else [{"title": "No results found"}],
             }
+        )
+
+    async def _handle_msx_search_execute(self, request: web.Request) -> web.Response:
+        """Handle execute:code action — MSX sends POST with {code: "query"}."""
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"action": "error:Invalid request"}, status=400)
+
+        query = body.get("code", "").strip()
+        if not query:
+            return web.json_response({"action": "error:Please enter a search query"})
+
+        prefix = f"http://{request.host}"
+        return web.json_response(
+            {"action": f"content:{prefix}/msx/search.json?q={quote(query, safe='')}"}
         )
 
     # --- MSX Detail Pages ---
@@ -513,7 +638,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
     # --- MSX Audio Playback ---
 
     async def _handle_msx_audio(self, request: web.Request) -> web.StreamResponse:
-        """Trigger playback via MA queue and proxy the audio stream."""
+        """Trigger playback via MA queue and stream audio to MSX."""
         player_id = request.match_info["player_id"]
         uri = request.query.get("uri")
         if not uri:
@@ -531,41 +656,60 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         # Trigger playback through MA queue system
         await self.provider.mass.player_queues.play_media(player_id, uri)
 
-        # Wait for stream URL to be set (play_media is async internally)
-        stream_url = None
+        # Wait for play_media() to set the PlayerMedia on our player
+        media = None
         for _ in range(100):  # Poll up to 10 seconds
-            stream_url = player.current_stream_url
-            if stream_url:
+            media = player.current_media
+            if media:
                 break
             await asyncio.sleep(0.1)
 
-        if not stream_url:
+        if not media:
             return web.Response(status=504, text="Playback setup timeout")
 
-        # Proxy audio stream (same logic as _handle_stream)
-        output_format = player.output_format
-        content_types = {
-            "mp3": "audio/mpeg",
-            "aac": "audio/aac",
-            "flac": "audio/flac",
+        # Get raw PCM audio via MA's internal streaming API (like sendspin)
+        pcm_format = AudioFormat(
+            content_type=ContentType.PCM_S16LE,
+            sample_rate=44100,
+            bit_depth=16,
+            channels=2,
+        )
+        audio_source = self.provider.mass.streams.get_stream(media, pcm_format)
+
+        # Encode PCM → output format via ffmpeg
+        output_format_str = player.output_format
+        content_type_map = {
+            "mp3": (ContentType.MP3, "audio/mpeg"),
+            "aac": (ContentType.AAC, "audio/aac"),
+            "flac": (ContentType.FLAC, "audio/flac"),
         }
-        content_type = content_types.get(output_format, "audio/mpeg")
+        codec, mime_type = content_type_map.get(
+            output_format_str, (ContentType.MP3, "audio/mpeg")
+        )
+        out_format = AudioFormat(
+            content_type=codec,
+            sample_rate=44100,
+            bit_depth=16,
+            channels=2,
+        )
 
         response = web.StreamResponse(
             status=200,
-            headers={"Content-Type": content_type, "Cache-Control": "no-cache"},
+            headers={"Content-Type": mime_type, "Cache-Control": "no-cache"},
         )
         await response.prepare(request)
 
         try:
-            async with ClientSession() as session:
-                async with session.get(stream_url) as upstream:
-                    async for chunk in upstream.content.iter_chunked(8192):
-                        await response.write(chunk)
+            async for chunk in get_ffmpeg_stream(
+                audio_input=audio_source,
+                input_format=pcm_format,
+                output_format=out_format,
+            ):
+                await response.write(chunk)
         except ConnectionResetError:
             logger.debug("Client disconnected from audio stream %s", player_id)
         except Exception:
-            logger.exception("Audio stream proxy error for player %s", player_id)
+            logger.exception("Audio stream error for player %s", player_id)
 
         return response
 
@@ -582,7 +726,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
     # --- Stream Proxy ---
 
     async def _handle_stream(self, request: web.Request) -> web.StreamResponse:
-        """Proxy audio stream from MA to the TV."""
+        """Stream audio from MA to the TV using internal API."""
         player_id = request.match_info["player_id"]
         player = self.provider.mass.players.get(player_id)
         if not player:
@@ -593,39 +737,57 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         if not isinstance(player, MSXPlayer):
             return web.Response(status=400, text="Not an MSX player")
 
-        stream_url = player.current_stream_url
-        if not stream_url:
+        media = player.current_media
+        if not media:
             return web.Response(status=404, text="No active stream")
 
-        # Determine content type from output format
-        output_format = player.output_format
-        content_types = {
-            "mp3": "audio/mpeg",
-            "aac": "audio/aac",
-            "flac": "audio/flac",
+        # Get raw PCM audio via MA's internal streaming API
+        pcm_format = AudioFormat(
+            content_type=ContentType.PCM_S16LE,
+            sample_rate=44100,
+            bit_depth=16,
+            channels=2,
+        )
+        audio_source = self.provider.mass.streams.get_stream(media, pcm_format)
+
+        # Encode PCM → output format via ffmpeg
+        output_format_str = player.output_format
+        content_type_map = {
+            "mp3": (ContentType.MP3, "audio/mpeg"),
+            "aac": (ContentType.AAC, "audio/aac"),
+            "flac": (ContentType.FLAC, "audio/flac"),
         }
-        content_type = content_types.get(output_format, "audio/mpeg")
+        codec, mime_type = content_type_map.get(
+            output_format_str, (ContentType.MP3, "audio/mpeg")
+        )
+        out_format = AudioFormat(
+            content_type=codec,
+            sample_rate=44100,
+            bit_depth=16,
+            channels=2,
+        )
 
         response = web.StreamResponse(
             status=200,
             headers={
-                "Content-Type": content_type,
+                "Content-Type": mime_type,
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
             },
         )
         await response.prepare(request)
 
-        # Proxy the audio stream from MA
         try:
-            async with ClientSession() as session:
-                async with session.get(stream_url) as upstream:
-                    async for chunk in upstream.content.iter_chunked(8192):
-                        await response.write(chunk)
+            async for chunk in get_ffmpeg_stream(
+                audio_input=audio_source,
+                input_format=pcm_format,
+                output_format=out_format,
+            ):
+                await response.write(chunk)
         except ConnectionResetError:
             logger.debug("Client disconnected from stream %s", player_id)
         except Exception:
-            logger.exception("Stream proxy error for player %s", player_id)
+            logger.exception("Stream error for player %s", player_id)
 
         return response
 

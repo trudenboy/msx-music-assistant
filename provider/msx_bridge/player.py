@@ -18,6 +18,7 @@ class MSXPlayer(Player):
     """Represents a Smart TV running MSX as a Music Assistant player."""
 
     current_stream_url: str | None = None
+    current_media: PlayerMedia | None = None
     output_format: str = "mp3"
 
     def __init__(
@@ -58,6 +59,7 @@ class MSXPlayer(Player):
         """Handle PLAY MEDIA command — store stream URL for the TV to fetch."""
         self.logger.info("play_media on %s: uri=%s", self.display_name, media.uri)
         self.current_stream_url = media.uri
+        self.current_media = media
         self._attr_current_media = media
         self._attr_playback_state = PlaybackState.PLAYING
         self._attr_elapsed_time = 0
@@ -94,6 +96,7 @@ class MSXPlayer(Player):
         self._attr_elapsed_time = None
         self._attr_elapsed_time_last_updated = None
         self.current_stream_url = None
+        self.current_media = None
         self.update_state()
 
     async def volume_set(self, volume_level: int) -> None:

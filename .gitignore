@@ -38,6 +38,8 @@ Thumbs.db
 coverage/
 .coverage
 htmlcov/
+.test-server.pid
+.test-server.log
 
 # Secrets
 *.pem
