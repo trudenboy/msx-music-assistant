@@ -38,11 +38,16 @@ class MSXHTTPServer:
         # MSX bootstrap
         self.app.router.add_get("/", self._handle_root)
         self.app.router.add_get("/msx/start.json", self._handle_start_json)
-        self.app.router.add_get("/msx/plugin.html", self._handle_plugin_html)
-        self.app.router.add_get("/msx/tvx-plugin-module.min.js", self._handle_tvx_lib)
-        self.app.router.add_get("/msx/tvx-plugin.min.js", self._handle_tvx_plugin_lib)
-        self.app.router.add_get("/msx/input.html", self._handle_input_html)
-        self.app.router.add_get("/msx/input.js", self._handle_input_js)
+        self.app.router.add_get("/msx/plugin.html", self._serve_static("plugin.html"))
+        self.app.router.add_get(
+            "/msx/tvx-plugin-module.min.js",
+            self._serve_static("tvx-plugin-module.min.js"),
+        )
+        self.app.router.add_get(
+            "/msx/tvx-plugin.min.js", self._serve_static("tvx-plugin.min.js")
+        )
+        self.app.router.add_get("/msx/input.html", self._serve_static("input.html"))
+        self.app.router.add_get("/msx/input.js", self._serve_static("input.js"))
 
         # MSX content pages (native MSX JSON navigation)
         self.app.router.add_get("/msx/menu.json", self._handle_msx_menu)
@@ -173,85 +178,14 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         }
         return web.json_response(start_config)
 
-    async def _handle_plugin_html(self, request: web.Request) -> web.Response:
-        """Serve the MSX interaction plugin as an HTML page."""
-        host = request.host
-        prefix = f"http://{host}"
-        html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <title>Music Assistant MSX Plugin</title>
-    <script src="{prefix}/msx/tvx-plugin-module.min.js"></script>
-</head>
-<body>
-<script>
-(function() {{
-    var BRIDGE = "{prefix}";
+    def _serve_static(self, filename: str) -> Any:
+        """Create a handler that serves a static file from the static directory."""
+        path = STATIC_DIR / filename
 
-    function MAHandler() {{}}
+        async def handler(request: web.Request) -> web.FileResponse:
+            return web.FileResponse(path)
 
-    MAHandler.prototype.handleRequest = function(dataId, data, callback) {{
-        if (dataId === "init") {{
-            callback({{
-                name: "Music Assistant",
-                version: "1.0.0",
-                headline: "Music Assistant",
-                menu: [
-                    {{ icon: "album", label: "Albums", data: BRIDGE + "/msx/albums.json" }},
-                    {{ icon: "person", label: "Artists", data: BRIDGE + "/msx/artists.json" }},
-                    {{ icon: "queue-music", label: "Playlists", data: BRIDGE + "/msx/playlists.json" }},
-                    {{ icon: "audiotrack", label: "Tracks", data: BRIDGE + "/msx/tracks.json" }}
-                ]
-            }});
-        }}
-    }};
-
-    tvx.PluginTools.onReady(function() {{
-        tvx.InteractionPlugin.setupHandler(new MAHandler());
-        tvx.InteractionPlugin.init();
-    }});
-}})();
-</script>
-</body>
-</html>"""
-        return web.Response(text=html, content_type="text/html")
-
-    async def _handle_tvx_lib(self, request: web.Request) -> web.Response:
-        """Serve the TVX plugin module library."""
-        lib_path = STATIC_DIR / "tvx-plugin-module.min.js"
-        return web.FileResponse(
-            lib_path, headers={"Content-Type": "application/javascript"}
-        )
-
-    async def _handle_tvx_plugin_lib(self, request: web.Request) -> web.Response:
-        """Serve the TVX plugin library (non-module version for input.html)."""
-        return web.FileResponse(
-            STATIC_DIR / "tvx-plugin.min.js",
-            headers={"Content-Type": "application/javascript"},
-        )
-
-    async def _handle_input_html(self, request: web.Request) -> web.Response:
-        """Serve the MSX Input Plugin HTML (local copy)."""
-        prefix = f"http://{request.host}"
-        html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <title>Input Interaction Plugin</title>
-    <meta charset="UTF-8" />
-    <script type="text/javascript" src="{prefix}/msx/tvx-plugin.min.js"></script>
-    <script type="text/javascript" src="{prefix}/msx/input.js"></script>
-</head>
-<body>
-</body>
-</html>"""
-        return web.Response(text=html, content_type="text/html")
-
-    async def _handle_input_js(self, request: web.Request) -> web.Response:
-        """Serve the MSX Input Plugin JavaScript."""
-        return web.FileResponse(
-            STATIC_DIR / "input.js",
-            headers={"Content-Type": "application/javascript"},
-        )
+        return handler
 
     # --- MSX Content Pages (native MSX JSON) ---
 
