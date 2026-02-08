@@ -7,6 +7,6 @@
   "requirements": [],
   "documentation": "https://github.com/music-assistant/server",
   "multi_instance": false,
-  "stage": "alpha",
+  "stage": "beta",
   "icon": "md:tv"
 }
