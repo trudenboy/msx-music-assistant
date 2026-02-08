@@ -622,6 +622,8 @@ def test_format_msx_track_includes_duration(provider: object) -> None:
     item = server._format_msx_track(track, "http://localhost")
     assert "3:00" in item["label"]
     assert "Test Artist" in item["label"]
+    assert "background" in item
+    assert item["background"] == item["image"]
 
 
 def test_format_msx_track_no_duration(provider: object) -> None:

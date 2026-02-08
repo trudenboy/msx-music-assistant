@@ -1014,11 +1014,13 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         label = getattr(track, "artist_str", "")
         if duration_str:
             label = f"{label} · {duration_str}" if label else duration_str
+        image_url = self._get_image_url(track)
         return {
             "title": track.name,
             "label": label,
             "playerLabel": track.name,
-            "image": self._get_image_url(track),
+            "image": image_url,
+            "background": image_url,
             "action": f"audio:{prefix}/msx/audio/msx_default?uri={quote(track.uri, safe='')}",
         }
 
