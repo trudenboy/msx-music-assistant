@@ -81,6 +81,6 @@ async def get_config_entries(
             label="Show notification before closing player",
             required=False,
             default_value=DEFAULT_SHOW_STOP_NOTIFICATION,
-            description="When stopping from MA, show a confirmation dialog on MSX before closing playback.",
+            description="Show confirmation dialog on MSX when stopping playback from MA.",
         ),
     )
