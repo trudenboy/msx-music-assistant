@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 from urllib.parse import quote
 
 from aiohttp.test_utils import TestClient
