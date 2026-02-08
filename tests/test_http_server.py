@@ -125,7 +125,11 @@ async def test_stream_success(provider: object, mass_mock: Mock) -> None:
     from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
 
     mock_player = Mock(spec=MSXPlayer)
-    mock_player.current_media = Mock()
+    mock_media = Mock()
+    mock_media.duration = 180
+    mock_media.source_id = None
+    mock_media.queue_item_id = None
+    mock_player.current_media = mock_media
     mock_player.output_format = "mp3"
     mass_mock.players.get.return_value = mock_player
 
