@@ -75,13 +75,8 @@ class MSXPlayer(Player):
         """Handle PAUSE command."""
         self.logger.info("pause on %s", self.display_name)
         # Snapshot the elapsed time before pausing
-        if (
-            self._attr_elapsed_time is not None
-            and self._attr_elapsed_time_last_updated is not None
-        ):
-            self._attr_elapsed_time += (
-                time.time() - self._attr_elapsed_time_last_updated
-            )
+        if self._attr_elapsed_time is not None and self._attr_elapsed_time_last_updated is not None:
+            self._attr_elapsed_time += time.time() - self._attr_elapsed_time_last_updated
         self._attr_playback_state = PlaybackState.PAUSED
         self._attr_elapsed_time_last_updated = time.time()
         self.update_state()

@@ -16,8 +16,10 @@ from music_assistant_models.enums import ConfigEntryType
 from .constants import (
     CONF_HTTP_PORT,
     CONF_OUTPUT_FORMAT,
+    CONF_PLAYER_IDLE_TIMEOUT,
     DEFAULT_HTTP_PORT,
     DEFAULT_OUTPUT_FORMAT,
+    DEFAULT_PLAYER_IDLE_TIMEOUT,
 )
 from .provider import MSXBridgeProvider
 
@@ -40,10 +42,10 @@ async def setup(
 
 
 async def get_config_entries(
-    mass: MusicAssistant,
-    instance_id: str | None = None,
-    action: str | None = None,
-    values: dict[str, ConfigValueType] | None = None,
+    mass: MusicAssistant,  # noqa: ARG001
+    instance_id: str | None = None,  # noqa: ARG001
+    action: str | None = None,  # noqa: ARG001
+    values: dict[str, ConfigValueType] | None = None,  # noqa: ARG001
 ) -> tuple[ConfigEntry, ...]:
     """Return Config entries to setup this provider."""
     return (
@@ -62,5 +64,13 @@ async def get_config_entries(
             required=True,
             default_value=DEFAULT_OUTPUT_FORMAT,
             description="Audio format for streaming to MSX (mp3, aac, or flac).",
+        ),
+        ConfigEntry(
+            key=CONF_PLAYER_IDLE_TIMEOUT,
+            type=ConfigEntryType.INTEGER,
+            label="Player Idle Timeout (minutes)",
+            required=True,
+            default_value=str(DEFAULT_PLAYER_IDLE_TIMEOUT),
+            description="Unregister MSX players after this many minutes without activity.",
         ),
     )

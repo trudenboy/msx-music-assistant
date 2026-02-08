@@ -52,21 +52,16 @@ async def test_handle_async_init_default_port(
         mock_server.start.assert_awaited_once()
 
 
-async def test_loaded_in_mass_registers_player(provider: MSXBridgeProvider) -> None:
-    """loaded_in_mass should create and register the default MSX player."""
-    with patch("music_assistant.providers.msx_bridge.provider.MSXPlayer") as MockPlayer:
-        mock_player = Mock()
-        MockPlayer.return_value = mock_player
+async def test_loaded_in_mass_starts_timeout_task(provider: MSXBridgeProvider) -> None:
+    """loaded_in_mass should start idle timeout task, not register static player."""
+    mock_task = Mock()
+    provider.mass.create_task = Mock(return_value=mock_task)
 
-        await provider.loaded_in_mass()
+    await provider.loaded_in_mass()
 
-        MockPlayer.assert_called_once_with(
-            provider=provider,
-            player_id="msx_default",
-            name="MSX TV",
-            output_format="mp3",
-        )
-        provider.mass.players.register.assert_awaited_once_with(mock_player)
+    provider.mass.create_task.assert_called_once()
+    assert provider._timeout_task is mock_task
+    provider.mass.players.register.assert_not_called()
 
 
 async def test_unload_stops_server_first(provider: MSXBridgeProvider) -> None:

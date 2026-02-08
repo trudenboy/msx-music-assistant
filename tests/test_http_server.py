@@ -478,7 +478,7 @@ async def test_msx_tracks_have_action(provider: object, mass_mock: Mock) -> None
         item = data["items"][0]
         assert "action" in item
         assert item["action"].startswith("audio:")
-        assert "/msx/audio/msx_default" in item["action"]
+        assert "/msx/audio/msx_" in item["action"]
         assert quote("library://track/1", safe="") in item["action"]
         assert "playerLabel" in item
         assert item["playerLabel"] == "Test Track"
@@ -510,7 +510,7 @@ async def test_msx_album_tracks(provider: object, mass_mock: Mock) -> None:
         item = data["items"][0]
         assert item["title"] == "Test Track"
         assert item["action"].startswith("audio:")
-        assert "/msx/audio/msx_default" in item["action"]
+        assert "/msx/audio/msx_" in item["action"]
     finally:
         await client.close()
 
@@ -619,7 +619,7 @@ def test_format_msx_track_includes_duration(provider: object) -> None:
 
     server = MSXHTTPServer(provider, 0)
     track = _make_track_mock()  # duration=180
-    item = server._format_msx_track(track, "http://localhost")
+    item = server._format_msx_track(track, "http://localhost", "msx_test")
     assert "3:00" in item["label"]
     assert "Test Artist" in item["label"]
     assert "background" in item
@@ -633,7 +633,7 @@ def test_format_msx_track_no_duration(provider: object) -> None:
     server = MSXHTTPServer(provider, 0)
     track = _make_track_mock()
     track.duration = 0
-    item = server._format_msx_track(track, "http://localhost")
+    item = server._format_msx_track(track, "http://localhost", "msx_test")
     assert item["label"] == "Test Artist"
 
 
@@ -644,7 +644,7 @@ def test_format_msx_track_duration_only(provider: object) -> None:
     server = MSXHTTPServer(provider, 0)
     track = _make_track_mock()
     track.artist_str = ""
-    item = server._format_msx_track(track, "http://localhost")
+    item = server._format_msx_track(track, "http://localhost", "msx_test")
     assert item["label"] == "3:00"
 
 
