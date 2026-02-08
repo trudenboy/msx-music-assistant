@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -34,6 +35,7 @@ class MSXHTTPServer:
         self.port = port
         self.app = web.Application(middlewares=[self._cors_middleware])
         self._runner: web.AppRunner | None = None
+        self._ws_clients: dict[str, set[web.WebSocketResponse]] = {}
         self._setup_routes()
 
     def _setup_routes(self) -> None:
@@ -74,6 +76,9 @@ class MSXHTTPServer:
 
         # Health
         self.app.router.add_get("/health", self._handle_health)
+
+        # WebSocket for push playback (MA -> MSX)
+        self.app.router.add_get("/ws", self._handle_ws)
 
         # Stream proxy
         self.app.router.add_get("/stream/{player_id}", self._handle_stream)
@@ -121,6 +126,11 @@ class MSXHTTPServer:
 
     async def stop(self) -> None:
         """Stop the HTTP server."""
+        for clients in self._ws_clients.values():
+            for ws in clients:
+                if not ws.closed:
+                    await ws.close()
+        self._ws_clients.clear()
         if self._runner:
             await self._runner.cleanup()
             self._runner = None
@@ -694,6 +704,63 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             }
         )
 
+    async def _handle_ws(self, request: web.Request) -> web.WebSocketResponse:
+        """WebSocket for push playback — clients subscribe by player_id."""
+        ws = web.WebSocketResponse(heartbeat=30)
+        await ws.prepare(request)
+
+        player_id, _ = self._get_player_id_and_device_param(request)
+        if player_id not in self._ws_clients:
+            self._ws_clients[player_id] = set()
+        self._ws_clients[player_id].add(ws)
+        logger.debug("WebSocket client connected for player %s", player_id)
+
+        try:
+            async for _msg in ws:
+                pass
+        finally:
+            self._ws_clients.get(player_id, set()).discard(ws)
+            if not self._ws_clients.get(player_id):
+                self._ws_clients.pop(player_id, None)
+            logger.debug("WebSocket client disconnected for player %s", player_id)
+
+        return ws
+
+    def broadcast_play(
+        self,
+        player_id: str,
+        *,
+        title: str | None = None,
+        artist: str | None = None,
+        image_url: str | None = None,
+        duration: int | None = None,
+    ) -> None:
+        """Notify subscribed WebSocket clients to start playback with metadata."""
+        clients = self._ws_clients.get(player_id, set())
+        if not clients:
+            logger.debug("No WebSocket clients for player %s, skip broadcast", player_id)
+            return
+        payload: dict[str, Any] = {"type": "play", "path": f"/stream/{player_id}"}
+        if title:
+            payload["title"] = title
+        if artist:
+            payload["artist"] = artist
+        if image_url:
+            payload["image_url"] = image_url
+        if duration is not None:
+            payload["duration"] = duration
+        msg = json.dumps(payload)
+        for ws in list(clients):
+            if not ws.closed:
+                self.provider.mass.create_task(self._ws_send(ws, msg))
+
+    async def _ws_send(self, ws: web.WebSocketResponse, text: str) -> None:
+        """Send text to WebSocket, ignore errors."""
+        try:
+            await ws.send_str(text)
+        except Exception as exc:
+            logger.debug("WebSocket send failed: %s", exc)
+
     # --- Stream Proxy ---
 
     async def _handle_stream(self, request: web.Request) -> web.StreamResponse:
@@ -710,6 +777,18 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         media = player.current_media
         if not media:
             return web.Response(status=404, text="No active stream")
+
+        # Resolve duration from queue item (flow_mode leaves media.duration unset)
+        duration = media.duration or 0
+        if media.source_id and media.queue_item_id:
+            queue_item = self.provider.mass.player_queues.get_item(
+                media.source_id, media.queue_item_id
+            )
+            if queue_item:
+                if queue_item.media_item:
+                    duration = getattr(queue_item.media_item, "duration", None) or duration
+                if not duration and queue_item.duration:
+                    duration = queue_item.duration
 
         # Get raw PCM audio via MA's internal streaming API
         pcm_format = AudioFormat(
@@ -735,14 +814,19 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             channels=2,
         )
 
-        response = web.StreamResponse(
-            status=200,
-            headers={
-                "Content-Type": mime_type,
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-            },
-        )
+        # Content-Length needed for MSX to play full track (otherwise ~90s cutoff)
+        bitrate_map = {"mp3": 40_000, "aac": 32_000}
+        bytes_per_sec = bitrate_map.get(output_format_str, 0)
+        headers: dict[str, str] = {
+            "Content-Type": mime_type,
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+        if duration and bytes_per_sec:
+            headers["Content-Length"] = str(int(duration * bytes_per_sec))
+        headers["Accept-Ranges"] = "none"
+
+        response = web.StreamResponse(status=200, headers=headers)
         await response.prepare(request)
 
         try:

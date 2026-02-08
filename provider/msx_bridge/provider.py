@@ -119,6 +119,25 @@ class MSXBridgeProvider(PlayerProvider):
         """Record activity for a player (extends idle timeout)."""
         self._player_last_activity[player_id] = time.time()
 
+    def notify_play_started(
+        self,
+        player_id: str,
+        *,
+        title: str | None = None,
+        artist: str | None = None,
+        image_url: str | None = None,
+        duration: int | None = None,
+    ) -> None:
+        """Notify WebSocket clients that playback started (for MA -> MSX push)."""
+        if self.http_server:
+            self.http_server.broadcast_play(
+                player_id,
+                title=title,
+                artist=artist,
+                image_url=image_url,
+                duration=duration,
+            )
+
     async def _handle_player_unregister(self, player_id: str) -> None:
         """Unregister a player with race-condition handling."""
         self.logger.debug("Unregistering MSX player %s", player_id)

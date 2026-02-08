@@ -64,6 +64,36 @@ class MSXPlayer(Player):
         self._attr_elapsed_time_last_updated = time.time()
         self.update_state()
 
+        # In flow_mode, PlayerMedia has title="Music Assistant" and no metadata.
+        # Resolve real metadata from the queue item when available.
+        title = media.title
+        artist = media.artist
+        image_url = media.image_url
+        duration = media.duration
+        if media.source_id and media.queue_item_id:
+            queue_item = self.mass.player_queues.get_item(media.source_id, media.queue_item_id)
+            if queue_item:
+                if queue_item.media_item:
+                    title = getattr(queue_item.media_item, "name", None) or title
+                    artist = getattr(queue_item.media_item, "artist_str", None) or artist
+                    duration = getattr(queue_item.media_item, "duration", None) or duration
+                if queue_item.image:
+                    image_url = self.mass.metadata.get_image_url(
+                        queue_item.image, size=500, prefer_stream_server=True
+                    )
+                if duration is None and queue_item.duration:
+                    duration = queue_item.duration
+                if title is None and queue_item.name:
+                    title = queue_item.name
+
+        self.provider.notify_play_started(
+            self.player_id,
+            title=title,
+            artist=artist,
+            image_url=image_url,
+            duration=duration,
+        )
+
     async def play(self) -> None:
         """Handle PLAY (resume) command."""
         self.logger.info("play (resume) on %s", self.display_name)
