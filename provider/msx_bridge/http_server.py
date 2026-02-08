@@ -254,7 +254,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                     "title": album.name,
                     "label": getattr(album, "artist_str", ""),
                     "image": image,
-                    "action": f"content:{prefix}/msx/albums/{album.item_id}/tracks.json",
+                    "action": f"content:{prefix}/msx/albums/{album.item_id}/tracks.json?provider={album.provider}",
                 }
             )
         return web.json_response(
@@ -421,7 +421,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                     "label": f"Album — {getattr(album, 'artist_str', '')}",
                     "icon": "msx-white-soft:album",
                     "image": self._get_image_url(album),
-                    "action": f"content:{prefix}/msx/albums/{album.item_id}/tracks.json",
+                    "action": f"content:{prefix}/msx/albums/{album.item_id}/tracks.json?provider={album.provider}",
                 }
             )
         for track in results.tracks:
@@ -474,7 +474,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                     "label": f"Album — {getattr(album, 'artist_str', '')}",
                     "icon": "msx-white-soft:album",
                     "image": self._get_image_url(album),
-                    "action": f"content:{prefix}/msx/albums/{album.item_id}/tracks.json",
+                    "action": f"content:{prefix}/msx/albums/{album.item_id}/tracks.json?provider={album.provider}",
                 }
             )
         for track in results.tracks:
@@ -501,8 +501,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         """Return tracks for an album as an MSX content page."""
         prefix = f"http://{request.host}"
         item_id = request.match_info["item_id"]
+        provider = request.query.get("provider", "library")
         try:
-            tracks = await self.provider.mass.music.albums.tracks(item_id, "library")
+            tracks = await self.provider.mass.music.albums.tracks(item_id, provider)
         except Exception:
             logger.warning("Failed to fetch tracks for album %s", item_id)
             tracks = []
@@ -536,7 +537,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                     "title": album.name,
                     "label": getattr(album, "artist_str", ""),
                     "image": self._get_image_url(album),
-                    "action": f"content:{prefix}/msx/albums/{album.item_id}/tracks.json",
+                    "action": f"content:{prefix}/msx/albums/{album.item_id}/tracks.json?provider={album.provider}",
                 }
             )
         return web.json_response(
