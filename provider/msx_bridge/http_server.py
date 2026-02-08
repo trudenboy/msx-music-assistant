@@ -116,7 +116,7 @@ class MSXHTTPServer:
                     "Access-Control-Allow-Headers": "*",
                 }
             )
-        response = await handler(request)
+        response: web.StreamResponse = await handler(request)
         response.headers["Access-Control-Allow-Origin"] = "*"
         return response
 
@@ -995,7 +995,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
 
     # --- Helpers ---
 
-    def _format_track(self, track: Any) -> dict:
+    def _format_track(self, track: Any) -> dict[str, Any]:
         """Format a track object for the API response."""
         return {
             "item_id": str(track.item_id),
@@ -1007,7 +1007,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             "uri": track.uri,
         }
 
-    def _format_msx_track(self, track: Any, prefix: str) -> dict:
+    def _format_msx_track(self, track: Any, prefix: str) -> dict[str, Any]:
         """Format a track as an MSX content item with playback action."""
         duration = getattr(track, "duration", 0) or 0
         duration_str = f"{duration // 60}:{duration % 60:02d}" if duration else ""
