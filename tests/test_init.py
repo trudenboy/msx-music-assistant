@@ -29,7 +29,9 @@ async def test_setup_returns_provider(
 async def test_get_config_entries(mass_mock: Mock) -> None:
     """get_config_entries() should return all config entries."""
     entries = await get_config_entries(mass_mock)
-    assert len(entries) == 4  # http_port, output_format, player_idle_timeout, show_stop_notification
+    assert (
+        len(entries) == 4
+    )  # http_port, output_format, player_idle_timeout, show_stop_notification
 
     port_entry = entries[0]
     assert port_entry.key == CONF_HTTP_PORT
