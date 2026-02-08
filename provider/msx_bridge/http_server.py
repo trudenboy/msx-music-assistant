@@ -55,10 +55,9 @@ class MSXHTTPServer:
         self.app.router.add_get("/msx/artists.json", self._handle_msx_artists)
         self.app.router.add_get("/msx/playlists.json", self._handle_msx_playlists)
         self.app.router.add_get("/msx/tracks.json", self._handle_msx_tracks)
-        self.app.router.add_get("/msx/search-launch.json", self._handle_msx_search_launch)
+        self.app.router.add_get("/msx/search-page.json", self._handle_msx_search_page)
         self.app.router.add_get("/msx/search-input.json", self._handle_msx_search_input)
         self.app.router.add_get("/msx/search.json", self._handle_msx_search)
-        self.app.router.add_post("/msx/search", self._handle_msx_search_execute)
 
         # MSX detail pages
         self.app.router.add_get(
@@ -233,16 +232,28 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         prefix = f"http://{request.host}"
         limit = int(request.query.get("limit", "50"))
         offset = int(request.query.get("offset", "0"))
-        albums = await self.provider.mass.music.albums.library_items(
-            limit=limit, offset=offset
+        albums = list(
+            await self.provider.mass.music.albums.library_items(
+                limit=limit, offset=offset
+            )
         )
+
+        # Resolve images: albums from library often lack metadata images,
+        # so fall back to the first track's image (which has the album cover).
+        async def resolve_image(album: Any) -> str | None:
+            url = self._get_image_url(album)
+            if url:
+                return url
+            return await self._get_album_image_fallback(album)
+
+        images = await asyncio.gather(*(resolve_image(a) for a in albums))
         items = []
-        for album in albums:
+        for album, image in zip(albums, images):
             items.append(
                 {
                     "title": album.name,
                     "label": getattr(album, "artist_str", ""),
-                    "image": self._get_image_url(album),
+                    "image": image,
                     "action": f"content:{prefix}/msx/albums/{album.item_id}/tracks.json",
                 }
             )
@@ -344,8 +355,8 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             }
         )
 
-    async def _handle_msx_search_launch(self, request: web.Request) -> web.Response:
-        """Return an action that launches the Input Plugin search keyboard."""
+    async def _handle_msx_search_page(self, request: web.Request) -> web.Response:
+        """Return a content page whose page-level action launches the Input Plugin keyboard."""
         prefix = f"http://{request.host}"
         action = (
             f"content:request:interaction:"
@@ -353,7 +364,25 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             f"|search:3|en|Search Music||||Search..."
             f"@{prefix}/msx/input.html"
         )
-        return web.json_response({"action": action})
+        return web.json_response(
+            {
+                "type": "list",
+                "headline": "Search",
+                "action": action,
+                "template": {
+                    "type": "separate",
+                    "layout": "0,0,2,4",
+                },
+                "items": [
+                    {
+                        "title": "Search Music",
+                        "titleFooter": "Press OK to open keyboard",
+                        "icon": "search",
+                        "action": action,
+                    }
+                ],
+            }
+        )
 
     async def _handle_msx_search_input(self, request: web.Request) -> web.Response:
         """Return search results for the MSX Input Plugin (search keyboard)."""
@@ -466,22 +495,6 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             }
         )
 
-    async def _handle_msx_search_execute(self, request: web.Request) -> web.Response:
-        """Handle execute:code action — MSX sends POST with {code: "query"}."""
-        try:
-            body = await request.json()
-        except Exception:
-            return web.json_response({"action": "error:Invalid request"}, status=400)
-
-        query = body.get("code", "").strip()
-        if not query:
-            return web.json_response({"action": "error:Please enter a search query"})
-
-        prefix = f"http://{request.host}"
-        return web.json_response(
-            {"action": f"content:{prefix}/msx/search.json?q={quote(query, safe='')}"}
-        )
-
     # --- MSX Detail Pages ---
 
     async def _handle_msx_album_tracks(self, request: web.Request) -> web.Response:
@@ -501,7 +514,6 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                 "template": {
                     "type": "separate",
                     "layout": "0,0,2,4",
-                    "icon": "msx-white-soft:audiotrack",
                     "imageFiller": "default",
                 },
                 "items": items if items else [{"title": "No tracks found"}],
@@ -978,4 +990,17 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         """Get an image URL for a media item."""
         if hasattr(item, "image") and item.image:
             return self.provider.mass.metadata.get_image_url(item.image)
+        return None
+
+    async def _get_album_image_fallback(self, album: Any) -> str | None:
+        """Get album image from its first track (albums often lack metadata images)."""
+        try:
+            tracks = await self.provider.mass.music.albums.tracks(
+                album.item_id, "library"
+            )
+            for track in tracks:
+                if hasattr(track, "image") and track.image:
+                    return self.provider.mass.metadata.get_image_url(track.image)
+        except Exception:
+            pass
         return None
