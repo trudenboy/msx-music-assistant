@@ -120,6 +120,7 @@ class MSXPlayer(Player):
         self._attr_elapsed_time_last_updated = None
         self.current_stream_url = None
         self.update_state()
+        self.provider.notify_play_stopped(self.player_id)
 
     async def volume_set(self, volume_level: int) -> None:
         """Handle VOLUME_SET command."""

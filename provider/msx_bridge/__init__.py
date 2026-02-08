@@ -17,9 +17,11 @@ from .constants import (
     CONF_HTTP_PORT,
     CONF_OUTPUT_FORMAT,
     CONF_PLAYER_IDLE_TIMEOUT,
+    CONF_SHOW_STOP_NOTIFICATION,
     DEFAULT_HTTP_PORT,
     DEFAULT_OUTPUT_FORMAT,
     DEFAULT_PLAYER_IDLE_TIMEOUT,
+    DEFAULT_SHOW_STOP_NOTIFICATION,
 )
 from .provider import MSXBridgeProvider
 
@@ -72,5 +74,13 @@ async def get_config_entries(
             required=True,
             default_value=str(DEFAULT_PLAYER_IDLE_TIMEOUT),
             description="Unregister MSX players after this many minutes without activity.",
+        ),
+        ConfigEntry(
+            key=CONF_SHOW_STOP_NOTIFICATION,
+            type=ConfigEntryType.BOOLEAN,
+            label="Show notification before closing player",
+            required=False,
+            default_value=DEFAULT_SHOW_STOP_NOTIFICATION,
+            description="When stopping from MA, show a confirmation dialog on MSX before closing playback.",
         ),
     )

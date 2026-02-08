@@ -10,8 +10,10 @@ from music_assistant.providers.msx_bridge import get_config_entries, setup
 from music_assistant.providers.msx_bridge.constants import (
     CONF_HTTP_PORT,
     CONF_OUTPUT_FORMAT,
+    CONF_SHOW_STOP_NOTIFICATION,
     DEFAULT_HTTP_PORT,
     DEFAULT_OUTPUT_FORMAT,
+    DEFAULT_SHOW_STOP_NOTIFICATION,
 )
 from music_assistant.providers.msx_bridge.provider import MSXBridgeProvider
 
@@ -25,9 +27,9 @@ async def test_setup_returns_provider(
 
 
 async def test_get_config_entries(mass_mock: Mock) -> None:
-    """get_config_entries() should return http_port and output_format entries."""
+    """get_config_entries() should return all config entries."""
     entries = await get_config_entries(mass_mock)
-    assert len(entries) == 3  # http_port, output_format, player_idle_timeout
+    assert len(entries) == 4  # http_port, output_format, player_idle_timeout, show_stop_notification
 
     port_entry = entries[0]
     assert port_entry.key == CONF_HTTP_PORT
@@ -38,3 +40,8 @@ async def test_get_config_entries(mass_mock: Mock) -> None:
     assert format_entry.key == CONF_OUTPUT_FORMAT
     assert format_entry.type == ConfigEntryType.STRING
     assert format_entry.default_value == DEFAULT_OUTPUT_FORMAT
+
+    show_notification_entry = entries[3]
+    assert show_notification_entry.key == CONF_SHOW_STOP_NOTIFICATION
+    assert show_notification_entry.type == ConfigEntryType.BOOLEAN
+    assert show_notification_entry.default_value == DEFAULT_SHOW_STOP_NOTIFICATION

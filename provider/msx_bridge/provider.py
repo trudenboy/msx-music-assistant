@@ -138,6 +138,11 @@ class MSXBridgeProvider(PlayerProvider):
                 duration=duration,
             )
 
+    def notify_play_stopped(self, player_id: str) -> None:
+        """Notify WebSocket clients that playback stopped (MA stop -> MSX)."""
+        if self.http_server:
+            self.http_server.broadcast_stop(player_id)
+
     async def _handle_player_unregister(self, player_id: str) -> None:
         """Unregister a player with race-condition handling."""
         self.logger.debug("Unregistering MSX player %s", player_id)

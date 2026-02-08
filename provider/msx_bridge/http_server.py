@@ -15,7 +15,12 @@ from music_assistant_models.media_items import AudioFormat
 
 from music_assistant.helpers.ffmpeg import get_ffmpeg_stream
 
-from .constants import MSX_PLAYER_ID_PREFIX, PLAYER_ID_SANITIZE_RE
+from .constants import (
+    CONF_SHOW_STOP_NOTIFICATION,
+    DEFAULT_SHOW_STOP_NOTIFICATION,
+    MSX_PLAYER_ID_PREFIX,
+    PLAYER_ID_SANITIZE_RE,
+)
 from .player import MSXPlayer
 
 if TYPE_CHECKING:
@@ -754,6 +759,25 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             if not ws.closed:
                 self.provider.mass.create_task(self._ws_send(ws, msg))
 
+    def broadcast_stop(self, player_id: str) -> None:
+        """Notify subscribed WebSocket clients to stop playback."""
+        clients = self._ws_clients.get(player_id, set())
+        if not clients:
+            logger.warning(
+                "No WebSocket clients for player %s (have: %s), skip stop broadcast",
+                player_id,
+                list(self._ws_clients.keys()),
+            )
+            return
+        show_notification = self.provider.config.get_value(
+            CONF_SHOW_STOP_NOTIFICATION, DEFAULT_SHOW_STOP_NOTIFICATION
+        )
+        payload: dict[str, Any] = {"type": "stop", "showNotification": bool(show_notification)}
+        msg = json.dumps(payload)
+        for ws in list(clients):
+            if not ws.closed:
+                self.provider.mass.create_task(self._ws_send(ws, msg))
+
     async def _ws_send(self, ws: web.WebSocketResponse, text: str) -> None:
         """Send text to WebSocket, ignore errors."""
         try:
@@ -1011,8 +1035,6 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                 "items": [self._format_track(track) for track in tracks],
             }
         )
-
-    # --- Playback Control Routes ---
 
     async def _handle_play(self, request: web.Request) -> web.Response:
         """Start playback of a track."""

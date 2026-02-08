@@ -41,7 +41,10 @@
         ws.onmessage = function(ev) {
             try {
                 var msg = JSON.parse(ev.data);
-                if (msg.type === "play" && msg.path && typeof tvx.InteractionPlugin.executeAction === "function") {
+                if (msg.type === "stop" && typeof tvx.InteractionPlugin.executeAction === "function") {
+                    var action = msg.showNotification ? "eject" : "player:eject";
+                    tvx.InteractionPlugin.executeAction(action);
+                } else if (msg.type === "play" && msg.path && typeof tvx.InteractionPlugin.executeAction === "function") {
                     var audioUrl = BRIDGE + msg.path;
                     var playerLabel = msg.title || "Music Assistant";
                     var labelParts = [];
