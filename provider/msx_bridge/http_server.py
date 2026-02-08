@@ -600,6 +600,14 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         if not isinstance(player, MSXPlayer):
             return web.Response(status=400, text="Not an MSX player")
 
+        # Resolve track URI to get duration metadata before playback
+        track_duration: int = 0
+        try:
+            media_item = await self.provider.mass.music.get_item_by_uri(uri)
+            track_duration = getattr(media_item, "duration", 0) or 0
+        except Exception:
+            logger.warning("Could not resolve track metadata for URI: %s", uri)
+
         # Trigger playback through MA queue system
         await self.provider.mass.player_queues.play_media(player_id, uri)
 
@@ -613,6 +621,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
 
         if not media:
             return web.Response(status=504, text="Playback setup timeout")
+
+        # Use resolved track duration (always available) over media.duration (may be None)
+        duration = track_duration or media.duration or 0
 
         # Get raw PCM audio via MA's internal streaming API (like sendspin)
         pcm_format = AudioFormat(
@@ -640,10 +651,29 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             channels=2,
         )
 
-        response = web.StreamResponse(
-            status=200,
-            headers={"Content-Type": mime_type, "Cache-Control": "no-cache"},
+        # Calculate Content-Length from duration and bitrate for CBR formats
+        # MP3: 320 kbps = 40,000 bytes/sec, AAC: 256 kbps = 32,000 bytes/sec
+        bitrate_map = {
+            "mp3": 40_000,
+            "aac": 32_000,
+        }
+        bytes_per_sec = bitrate_map.get(output_format_str, 0)
+
+        headers: dict[str, str] = {"Content-Type": mime_type}
+        if duration and bytes_per_sec:
+            headers["Content-Length"] = str(int(duration * bytes_per_sec))
+        headers["Accept-Ranges"] = "none"
+
+        logger.debug(
+            "MSX audio %s: format=%s, track_duration=%s, media_duration=%s, Content-Length=%s",
+            player_id,
+            output_format_str,
+            track_duration,
+            media.duration,
+            headers.get("Content-Length", "NOT SET"),
         )
+
+        response = web.StreamResponse(status=200, headers=headers)
         await response.prepare(request)
 
         try:
@@ -979,9 +1009,14 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
 
     def _format_msx_track(self, track: Any, prefix: str) -> dict:
         """Format a track as an MSX content item with playback action."""
+        duration = getattr(track, "duration", 0) or 0
+        duration_str = f"{duration // 60}:{duration % 60:02d}" if duration else ""
+        label = getattr(track, "artist_str", "")
+        if duration_str:
+            label = f"{label} · {duration_str}" if label else duration_str
         return {
             "title": track.name,
-            "label": getattr(track, "artist_str", ""),
+            "label": label,
             "playerLabel": track.name,
             "image": self._get_image_url(track),
             "action": f"audio:{prefix}/msx/audio/msx_default?uri={quote(track.uri, safe='')}",

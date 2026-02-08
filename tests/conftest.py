@@ -60,6 +60,9 @@ def mass_mock(player_config_mock: Mock) -> Mock:
         return_value=Mock(artists=[], albums=[], tracks=[], playlists=[])
     )
 
+    # Track metadata resolution
+    mass.music.get_item_by_uri = AsyncMock(return_value=None)
+
     # Playback control
     mass.player_queues.play_media = AsyncMock()
     mass.players.cmd_pause = AsyncMock()

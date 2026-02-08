@@ -74,14 +74,14 @@ async def test_stream_player_not_found(http_client: TestClient) -> None:
     assert resp.status == 404
 
 
-async def test_stream_no_url(provider: object, mass_mock: Mock) -> None:
-    """GET /stream/{id} should return 404 when player has no stream URL."""
+async def test_stream_no_media(provider: object, mass_mock: Mock) -> None:
+    """GET /stream/{id} should return 404 when player has no current media."""
     from aiohttp.test_utils import TestClient, TestServer
 
     from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
 
     mock_player = Mock(spec=MSXPlayer)
-    mock_player.current_stream_url = None
+    mock_player.current_media = None
     mass_mock.players.get.return_value = mock_player
 
     server = MSXHTTPServer(provider, 0)
@@ -119,39 +119,35 @@ async def test_stream_not_msx_player(provider: object, mass_mock: Mock) -> None:
 
 
 async def test_stream_success(provider: object, mass_mock: Mock) -> None:
-    """GET /stream/{id} should proxy bytes from upstream when player has a stream URL."""
+    """GET /stream/{id} should stream audio via internal API."""
     from aiohttp.test_utils import TestClient, TestServer
 
     from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
 
     mock_player = Mock(spec=MSXPlayer)
-    mock_player.current_stream_url = "http://ma-internal/stream/abc"
+    mock_player.current_media = Mock()
     mock_player.output_format = "mp3"
     mass_mock.players.get.return_value = mock_player
+
+    # Mock get_stream to return an async generator
+    mass_mock.streams = Mock()
+    mass_mock.streams.get_stream = Mock(return_value=_async_iter([b"pcm-data"]))
 
     server = MSXHTTPServer(provider, 0)
     client = TestClient(TestServer(server.app))
     await client.start_server()
     try:
-        # Mock the ClientSession used for upstream proxy
-        mock_upstream_resp = AsyncMock()
-        chunks = [b"audio-chunk-1", b"audio-chunk-2"]
-        mock_upstream_resp.content.iter_chunked = Mock(return_value=_async_iter(chunks))
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-        mock_session.get = Mock(return_value=_async_ctx(mock_upstream_resp))
-
+        chunks = [b"encoded-chunk-1", b"encoded-chunk-2"]
         with patch(
-            "music_assistant.providers.msx_bridge.http_server.ClientSession",
-            return_value=mock_session,
+            "music_assistant.providers.msx_bridge.http_server.get_ffmpeg_stream",
+            return_value=_async_iter(chunks),
         ):
             resp = await client.get("/stream/msx_test")
             assert resp.status == 200
             assert resp.headers["Content-Type"] == "audio/mpeg"
             body = await resp.read()
-            assert b"audio-chunk-1" in body
-            assert b"audio-chunk-2" in body
+            assert b"encoded-chunk-1" in body
+            assert b"encoded-chunk-2" in body
     finally:
         await client.close()
 
@@ -612,6 +608,42 @@ async def test_msx_audio_not_msx_player(provider: object, mass_mock: Mock) -> No
         assert "Not an MSX player" in body
     finally:
         await client.close()
+
+
+# --- Duration in track formatting ---
+
+
+def test_format_msx_track_includes_duration(provider: object) -> None:
+    """_format_msx_track should include duration in label."""
+    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
+
+    server = MSXHTTPServer(provider, 0)
+    track = _make_track_mock()  # duration=180
+    item = server._format_msx_track(track, "http://localhost")
+    assert "3:00" in item["label"]
+    assert "Test Artist" in item["label"]
+
+
+def test_format_msx_track_no_duration(provider: object) -> None:
+    """_format_msx_track should handle zero/missing duration gracefully."""
+    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
+
+    server = MSXHTTPServer(provider, 0)
+    track = _make_track_mock()
+    track.duration = 0
+    item = server._format_msx_track(track, "http://localhost")
+    assert item["label"] == "Test Artist"
+
+
+def test_format_msx_track_duration_only(provider: object) -> None:
+    """_format_msx_track should show only duration when no artist."""
+    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
+
+    server = MSXHTTPServer(provider, 0)
+    track = _make_track_mock()
+    track.artist_str = ""
+    item = server._format_msx_track(track, "http://localhost")
+    assert item["label"] == "3:00"
 
 
 # --- Async iteration helpers for stream mocking ---
