@@ -10,9 +10,11 @@ from typing import Any, cast
 from music_assistant.models.player_provider import PlayerProvider
 
 from .constants import (
+    CONF_ABORT_STREAM_FIRST,
     CONF_HTTP_PORT,
     CONF_OUTPUT_FORMAT,
     CONF_PLAYER_IDLE_TIMEOUT,
+    DEFAULT_ABORT_STREAM_FIRST,
     DEFAULT_HTTP_PORT,
     DEFAULT_OUTPUT_FORMAT,
     DEFAULT_PLAYER_IDLE_TIMEOUT,
@@ -119,6 +121,26 @@ class MSXBridgeProvider(PlayerProvider):
         """Record activity for a player (extends idle timeout)."""
         self._player_last_activity[player_id] = time.time()
 
+    def on_player_disabled(self, player_id: str) -> None:
+        """Called when player is disabled — do NOT unregister (base does unregister).
+
+        MSX players are registered on demand; unregister on disable would remove them
+        from the list. On enable, discovery is empty so the player would not come back
+        until the TV reconnects. We keep the player registered but disabled so it stays
+        visible in the list when re-enabled.
+
+        We still stop playback on TV by broadcasting stop and cancelling streams.
+        """
+        if self.http_server:
+            self.http_server.broadcast_stop(player_id)
+            self.http_server.cancel_streams_for_player(player_id)
+        # Do NOT call super() — base PlayerProvider unregisters the player here.
+
+    def on_player_enabled(self, player_id: str) -> None:
+        """Called when player is enabled — no-op, player already registered."""
+        # Player was never unregistered (see on_player_disabled), so nothing to do.
+        pass
+
     def notify_play_started(
         self,
         player_id: str,
@@ -139,14 +161,28 @@ class MSXBridgeProvider(PlayerProvider):
             )
 
     def notify_play_stopped(self, player_id: str) -> None:
-        """Notify WebSocket clients that playback stopped (MA stop -> MSX)."""
-        self.logger.info(
-            "[MSX_DEBUG] notify_play_stopped called for player_id=%s",
-            player_id,
+        """Notify WebSocket clients that playback stopped (MA stop -> MSX).
+
+        Sends broadcast_stop + cancel_streams twice — same as Disable flow, which
+        stops playback on MSX instantly (vs single signal with ~30s delay).
+        """
+        if not self.http_server:
+            return
+        abort_first = cast(
+            bool,
+            self.config.get_value(CONF_ABORT_STREAM_FIRST, DEFAULT_ABORT_STREAM_FIRST),
         )
-        if self.http_server:
-            self.http_server.cancel_streams_for_player(player_id)
-            self.http_server.broadcast_stop(player_id)
+
+        def _send() -> None:
+            if abort_first:
+                self.http_server.cancel_streams_for_player(player_id)
+                self.http_server.broadcast_stop(player_id)
+            else:
+                self.http_server.broadcast_stop(player_id)
+                self.http_server.cancel_streams_for_player(player_id)
+
+        _send()
+        _send()
 
     async def _handle_player_unregister(self, player_id: str) -> None:
         """Unregister a player with race-condition handling."""

@@ -71,17 +71,14 @@ async def test_play_media(player: MSXPlayer) -> None:
     player.update_state.assert_called()
 
 
-async def test_play_resume(player: MSXPlayer) -> None:
-    """play() should set state to PLAYING and update timestamp without touching elapsed."""
+async def test_play_resume(player: MSXPlayer, mass_mock: Mock) -> None:
+    """play() when PAUSED should call queue resume to re-send the track to MSX."""
     player._attr_playback_state = PlaybackState.PAUSED
     player._attr_elapsed_time = 42.0
 
     await player.play()
 
-    assert player._attr_playback_state == PlaybackState.PLAYING
-    assert player._attr_elapsed_time == 42.0  # untouched
-    assert player._attr_elapsed_time_last_updated is not None
-    player.update_state.assert_called()
+    mass_mock.player_queues.resume.assert_awaited_once_with(player.player_id)
 
 
 async def test_pause_accumulates_time(player: MSXPlayer) -> None:
@@ -110,6 +107,21 @@ async def test_pause_none_elapsed(player: MSXPlayer) -> None:
     assert player._attr_playback_state == PlaybackState.PAUSED
     # elapsed stays None since there was nothing to accumulate
     assert player._attr_elapsed_time is None
+
+
+async def test_pause_notifies_stop_on_msx(player: MSXPlayer) -> None:
+    """pause() should call provider.notify_play_stopped so MSX closes the player."""
+    from unittest.mock import patch
+
+    player._attr_playback_state = PlaybackState.PLAYING
+    player._attr_elapsed_time = 10.0
+    player._attr_elapsed_time_last_updated = 100.0
+
+    with patch.object(player.provider, "notify_play_stopped") as mock_notify:
+        await player.pause()
+
+    assert player._attr_playback_state == PlaybackState.PAUSED
+    mock_notify.assert_called_once_with(player.player_id)
 
 
 async def test_stop_clears_all(player: MSXPlayer) -> None:

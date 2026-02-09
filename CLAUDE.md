@@ -13,11 +13,11 @@ Smart TV (MSX App) --HTTP--> MSXBridgeProvider (inside MA, port 8099) --internal
 ```
 
 **Provider** (`provider/msx_bridge/`): MA Player Provider with embedded HTTP server.
-- `__init__.py` — `setup()`, `get_config_entries()` (4 config entries), provider entry point
+- `__init__.py` — `setup()`, `get_config_entries()` (5 config entries), provider entry point
 - `provider.py` — `MSXBridgeProvider(PlayerProvider)`: manages lifecycle, dynamic player registration, idle timeout loop, WebSocket push notifications, starts HTTP server
 - `player.py` — `MSXPlayer(Player)`: represents a Smart TV as an MA player. Stores stream URL from `play_media()` for the TV to fetch via HTTP.
 - `http_server.py` — `MSXHTTPServer`: aiohttp server with routes for MSX bootstrap, library browsing, playback control, WebSocket, and stream proxy
-- `constants.py` — config keys and defaults (4 config entries: `http_port`, `output_format`, `player_idle_timeout`, `show_stop_notification`)
+- `constants.py` — config keys and defaults (5 config entries: `http_port`, `output_format`, `player_idle_timeout`, `show_stop_notification`, `abort_stream_first`)
 - `manifest.json` — provider metadata for MA
 - `static/` — static files served by aiohttp:
   - `plugin.html` — MSX interaction plugin (detects device ID, opens WebSocket, builds menu)
@@ -53,8 +53,9 @@ Smart TV (MSX App) --HTTP--> MSXBridgeProvider (inside MA, port 8099) --internal
 **WebSocket Push (MA → MSX):**
 1. Plugin connects to `/ws?device_id=...` on startup
 2. When MA calls `play_media()` on `MSXPlayer`, player calls `notify_play_started()` → broadcasts `{type: "play", path, title, artist, image_url, duration}` to subscribed WebSocket clients
-3. When MA calls `stop()`, broadcasts `{type: "stop", showNotification}` to clients
-4. Plugin receives messages and controls MSX native player accordingly
+3. When MA calls `stop()` or `pause()`, `notify_play_stopped()` broadcasts `{type: "stop", showNotification}` (sent twice for instant MSX close)
+4. Plugin receives messages and calls `executeAction("[player:eject|player:hide]")` or `"eject"`
+5. **Resume:** When `play()` is called from PAUSED, `MSXPlayer.play()` calls `mass.player_queues.resume(player_id)` → queue re-sends current track to MSX
 
 **Direct Stream Proxy (for programmatic playback):**
 1. MA calls `play_media(media)` on `MSXPlayer` → player stores `media.uri` as `current_stream_url`
@@ -124,11 +125,12 @@ python -c "from music_assistant.providers.msx_bridge import setup; print('OK')"
 - Audio playback endpoint (`/msx/audio/{player_id}?uri=...`) with queue integration, PCM→ffmpeg encoding, and Content-Length for progress bar
 - Stream proxy (`/stream/{player_id}`) with same PCM→ffmpeg encoding chain
 - Library REST API (`/api/albums`, `/api/artists`, `/api/playlists`, `/api/tracks`, `/api/search`, `/api/recently-played`)
-- Playback control (`/api/play`, `/api/pause`, `/api/stop`, `/api/next`, `/api/previous`)
+- Playback control (`/api/play`, `/api/pause`, `/api/stop`, `/api/quick-stop/{player_id}`, `/api/next`, `/api/previous`)
 - Health endpoint (`/health`)
 - Status dashboard (`/`)
 - 58 unit tests (57 passed + 1 skipped) + 30 integration tests
 - `_format_msx_track()` helper reused across tracks, album tracks, playlist tracks, and search
-- 4 config entries: `http_port`, `output_format`, `player_idle_timeout`, `show_stop_notification`
+- 5 config entries: `http_port`, `output_format`, `player_idle_timeout`, `show_stop_notification`, `abort_stream_first`
+- `on_player_disabled` override: does not unregister (player stays on Enable); still broadcasts stop for instant MSX close
 
 Next steps: integration testing with real MA server + MSX app, full MSX TypeScript plugin.

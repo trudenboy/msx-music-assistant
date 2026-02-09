@@ -167,13 +167,29 @@ class MSXPlayer(Player):
     async def play(self) -> None:
         """Handle PLAY (resume) command."""
         self.logger.info("play (resume) on %s", self.display_name)
+        if self._attr_playback_state == PlaybackState.PAUSED:
+            await self._resume_from_pause()
+            return
         self._attr_playback_state = PlaybackState.PLAYING
         self._attr_elapsed_time_last_updated = time.time()
         self.update_state()
         await self._propagate_to_group_members("play")
 
+    async def _resume_from_pause(self) -> None:
+        """Resume playback after pause — queue re-sends current track to MSX."""
+        try:
+            await self.mass.player_queues.resume(self.player_id)
+        except Exception:
+            self.logger.warning(
+                "resume from pause failed, falling back to play state only",
+                exc_info=True,
+            )
+            self._attr_playback_state = PlaybackState.PLAYING
+            self._attr_elapsed_time_last_updated = time.time()
+            self.update_state()
+
     async def pause(self) -> None:
-        """Handle PAUSE command."""
+        """Handle PAUSE command — stop playback on MSX but keep queue/position for resume."""
         self.logger.info("pause on %s", self.display_name)
         # Snapshot the elapsed time before pausing
         if (
@@ -186,6 +202,9 @@ class MSXPlayer(Player):
         self._attr_playback_state = PlaybackState.PAUSED
         self._attr_elapsed_time_last_updated = time.time()
         self.update_state()
+        cast("MSXBridgeProvider", self.provider).notify_play_stopped(
+            self.player_id
+        )
         await self._propagate_to_group_members("pause")
 
     async def stop(self) -> None:

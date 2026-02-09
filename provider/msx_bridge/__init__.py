@@ -14,10 +14,12 @@ from music_assistant_models.config_entries import ConfigEntry
 from music_assistant_models.enums import ConfigEntryType, ProviderFeature
 
 from .constants import (
+    CONF_ABORT_STREAM_FIRST,
     CONF_HTTP_PORT,
     CONF_OUTPUT_FORMAT,
     CONF_PLAYER_IDLE_TIMEOUT,
     CONF_SHOW_STOP_NOTIFICATION,
+    DEFAULT_ABORT_STREAM_FIRST,
     DEFAULT_HTTP_PORT,
     DEFAULT_OUTPUT_FORMAT,
     DEFAULT_PLAYER_IDLE_TIMEOUT,
@@ -81,5 +83,13 @@ async def get_config_entries(
             required=False,
             default_value=DEFAULT_SHOW_STOP_NOTIFICATION,
             description="Show confirmation dialog on MSX when stopping playback from MA.",
+        ),
+        ConfigEntry(
+            key=CONF_ABORT_STREAM_FIRST,
+            type=ConfigEntryType.BOOLEAN,
+            label="Abort stream before broadcast stop",
+            required=False,
+            default_value=DEFAULT_ABORT_STREAM_FIRST,
+            description="When stopping: abort the stream connection first, then send WebSocket stop. May stop playback faster on some TVs.",
         ),
     )

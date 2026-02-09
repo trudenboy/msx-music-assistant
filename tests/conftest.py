@@ -65,6 +65,7 @@ def mass_mock(player_config_mock: Mock) -> Mock:
 
     # Playback control
     mass.player_queues.play_media = AsyncMock()
+    mass.player_queues.resume = AsyncMock()
     mass.players.cmd_pause = AsyncMock()
     mass.players.cmd_stop = AsyncMock()
     mass.players.cmd_next_track = AsyncMock()

@@ -11,6 +11,7 @@ Stream your [Music Assistant](https://music-assistant.io/) library to Smart TVs 
 - **Dynamic Player Registration** — TVs register as MA players on-demand via device ID or IP, with automatic idle timeout cleanup
 - **Multi-TV Support** — each TV gets its own unique player, identified by MSX device ID
 - **WebSocket Push** — MA-initiated playback (play/stop) pushed to TVs in real-time via WebSocket
+- **Instant Stop & Pause** — Stop and Pause close the MSX player immediately; Resume re-sends the current track
 - **Universal TV Support** — works on any TV/device running the MSX app (Samsung Tizen, LG webOS, Android TV, Fire TV, Apple TV, web browsers)
 - **Configurable Output** — MP3, AAC, or FLAC output format
 - **Local Network** — runs entirely on your LAN, no cloud dependencies
@@ -109,7 +110,7 @@ cd ../ma-server && python -m music_assistant --log-level debug
 3. Enter: `http://<YOUR_SERVER_IP>:8099/msx/start.json`
 4. Restart MSX
 
-You can also visit `http://<YOUR_SERVER_IP>:8099/` in a browser for a status dashboard showing the setup URL and registered players.
+You can also visit `http://<YOUR_SERVER_IP>:8099/` in a browser for a status dashboard showing the setup URL, registered players, and a **Quick stop** button per player to stop playback on the TV immediately (same effect as disabling the player in MA).
 
 ## HTTP Endpoints
 
@@ -174,6 +175,7 @@ You can also visit `http://<YOUR_SERVER_IP>:8099/` in a browser for a status das
 | POST | `/api/play` | Start playback (`{track_uri, player_id}`) |
 | POST | `/api/pause/{player_id}` | Pause |
 | POST | `/api/stop/{player_id}` | Stop |
+| POST | `/api/quick-stop/{player_id}` | Stop playback on MSX immediately (stop + extra broadcast/cancel; use when normal Stop has ~30s delay) |
 | POST | `/api/next/{player_id}` | Next track |
 | POST | `/api/previous/{player_id}` | Previous track |
 
@@ -191,7 +193,7 @@ You can also visit `http://<YOUR_SERVER_IP>:8099/` in a browser for a status das
 
 ## Configuration
 
-The provider exposes four config entries in the MA UI:
+The provider exposes five config entries in the MA UI:
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -199,6 +201,13 @@ The provider exposes four config entries in the MA UI:
 | `output_format` | `mp3` | Audio format for streaming (`mp3`, `aac`, `flac`) |
 | `player_idle_timeout` | `30` | Unregister idle MSX players after this many minutes |
 | `show_stop_notification` | `false` | Show confirmation dialog on MSX when stopping playback from MA |
+| `abort_stream_first` | `false` | When stopping: abort stream connection first, then send WebSocket stop (may help on some TVs) |
+
+### Stop, Pause, and Resume
+
+- **Stop** — Closes the MSX player immediately via a double broadcast (same signal as Disable).
+- **Pause** — Closes the MSX player but keeps queue and position in MA; **Play** resumes by re-sending the current track.
+- **Quick stop** — Dashboard button or `POST /api/quick-stop/{player_id}` for direct HTTP control.
 
 ## Development
 

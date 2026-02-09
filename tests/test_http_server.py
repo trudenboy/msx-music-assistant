@@ -40,6 +40,7 @@ async def test_start_json(http_client: TestClient) -> None:
     assert data["name"] == "Music Assistant"
     assert "menu:request:interaction:init@" in data["parameter"]
     assert "plugin.html" in data["parameter"]
+    assert "plugin.html?v=" in data["parameter"]
     assert "scripts" not in data
 
 
@@ -51,6 +52,12 @@ async def test_plugin_html(http_client: TestClient) -> None:
     body = await resp.text()
     assert "tvx.InteractionPlugin" in body
     assert "handleRequest" in body
+    # Menu order: Recently played first, Search last (recently-played before Search in buildMenu)
+    assert "recently-played.json" in body
+    idx_recently = body.index("recently-played.json")
+    idx_search = body.index('label: "Search"')
+    assert idx_recently < idx_search, "Recently played should appear before Search in menu"
+    assert resp.headers.get("Cache-Control") == "no-cache, no-store, must-revalidate"
 
 
 async def test_tvx_lib(http_client: TestClient) -> None:
@@ -336,6 +343,27 @@ async def test_stop(provider: object, mass_mock: Mock) -> None:
         resp = await client.post("/api/stop/msx_test")
         assert resp.status == 200
         mass_mock.players.cmd_stop.assert_awaited_once_with("msx_test")
+    finally:
+        await client.close()
+
+
+async def test_quick_stop(provider: object, mass_mock: Mock) -> None:
+    """POST /api/quick-stop/{id} should call cmd_stop and notify_play_stopped."""
+    from unittest.mock import patch
+
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
+
+    server = MSXHTTPServer(provider, 0)
+    client = TestClient(TestServer(server.app))
+    await client.start_server()
+    try:
+        with patch.object(provider, "notify_play_stopped", Mock()) as mock_notify:
+            resp = await client.post("/api/quick-stop/msx_test")
+        assert resp.status == 200
+        mass_mock.players.cmd_stop.assert_awaited_once_with("msx_test")
+        mock_notify.assert_called_once_with("msx_test")
     finally:
         await client.close()
 

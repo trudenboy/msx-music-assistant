@@ -51,7 +51,7 @@ class MSXHTTPServer:
         # MSX bootstrap
         self.app.router.add_get("/", self._handle_root)
         self.app.router.add_get("/msx/start.json", self._handle_start_json)
-        self.app.router.add_get("/msx/plugin.html", self._serve_static("plugin.html"))
+        self.app.router.add_get("/msx/plugin.html", self._handle_msx_plugin_html)
         self.app.router.add_get(
             "/msx/tvx-plugin-module.min.js",
             self._serve_static("tvx-plugin-module.min.js"),
@@ -59,7 +59,7 @@ class MSXHTTPServer:
         self.app.router.add_get(
             "/msx/tvx-plugin.min.js", self._serve_static("tvx-plugin.min.js")
         )
-        self.app.router.add_get("/msx/input.html", self._serve_static("input.html"))
+        self.app.router.add_get("/msx/input.html", self._handle_msx_input_html)
         self.app.router.add_get("/msx/input.js", self._serve_static("input.js"))
 
         # MSX content pages (native MSX JSON navigation)
@@ -68,6 +68,9 @@ class MSXHTTPServer:
         self.app.router.add_get("/msx/artists.json", self._handle_msx_artists)
         self.app.router.add_get("/msx/playlists.json", self._handle_msx_playlists)
         self.app.router.add_get("/msx/tracks.json", self._handle_msx_tracks)
+        self.app.router.add_get(
+            "/msx/recently-played.json", self._handle_msx_recently_played
+        )
         self.app.router.add_get("/msx/search-page.json", self._handle_msx_search_page)
         self.app.router.add_get("/msx/search-input.json", self._handle_msx_search_input)
         self.app.router.add_get("/msx/search.json", self._handle_msx_search)
@@ -116,6 +119,9 @@ class MSXHTTPServer:
         self.app.router.add_post("/api/play", self._handle_play)
         self.app.router.add_post("/api/pause/{player_id}", self._handle_pause)
         self.app.router.add_post("/api/stop/{player_id}", self._handle_stop)
+        self.app.router.add_post(
+            "/api/quick-stop/{player_id}", self._handle_quick_stop
+        )
         self.app.router.add_post("/api/next/{player_id}", self._handle_next)
         self.app.router.add_post("/api/previous/{player_id}", self._handle_previous)
 
@@ -161,9 +167,14 @@ class MSXHTTPServer:
     async def _handle_root(self, request: web.Request) -> web.Response:
         """Serve status dashboard."""
         players = self.provider.players
-        player_info = "".join(
-            f"<li>{p.display_name} — {p.playback_state.value}</li>" for p in players
-        )
+        base = f"http://{request.host}"
+        player_rows = []
+        for p in players:
+            row = f'<li class="player-row"><span>{p.display_name} — {p.playback_state.value}</span>'
+            row += f'<form method="post" action="{base}/api/quick-stop/{p.player_id}" style="display:inline">'
+            row += '<button type="submit" class="btn">Quick stop</button></form></li>'
+            player_rows.append(row)
+        player_info = "".join(player_rows) if player_rows else ""
         html = f"""<!DOCTYPE html>
 <html>
 <head><title>MSX Bridge</title>
@@ -171,6 +182,10 @@ class MSXHTTPServer:
 body {{ font-family: system-ui, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }}
 .info {{ background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 10px 0; }}
 code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
+.player-row {{ display: flex; align-items: center; gap: 12px; margin: 8px 0; list-style: none; }}
+.player-row form {{ margin: 0; }}
+.btn {{ padding: 6px 12px; border-radius: 4px; border: 1px solid #1976d2; background: #1976d2; color: white; cursor: pointer; font-size: 14px; }}
+.btn:hover {{ background: #1565c0; }}
 </style>
 </head>
 <body>
@@ -191,10 +206,11 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         """Return MSX start configuration."""
         host = request.host
         prefix = f"http://{host}"
+        # Version in URL forces MSX to refetch plugin after menu changes (avoids cache)
         start_config = {
             "name": "Music Assistant",
             "version": "1.0.0",
-            "parameter": f"menu:request:interaction:init@{prefix}/msx/plugin.html",
+            "parameter": f"menu:request:interaction:init@{prefix}/msx/plugin.html?v=2",
         }
         return web.json_response(start_config)
 
@@ -207,6 +223,20 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
 
         return handler
 
+    async def _handle_msx_plugin_html(self, request: web.Request) -> web.Response:
+        """Serve plugin.html with no-cache so MSX always gets latest menu order."""
+        path = STATIC_DIR / "plugin.html"
+        response = web.FileResponse(path)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
+    async def _handle_msx_input_html(self, request: web.Request) -> web.FileResponse:
+        """Serve input.html and ensure player is registered when Search is opened."""
+        await self._ensure_player_for_request(request)
+        return web.FileResponse(STATIC_DIR / "input.html")
+
     # --- MSX Content Pages (native MSX JSON) ---
 
     async def _handle_msx_menu(self, request: web.Request) -> web.Response:
@@ -215,7 +245,11 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         host = request.host
         prefix = f"http://{host}"
         items = [
-            ("Search", "search", f"{prefix}/msx/search-page.json"),
+            (
+                "Recently played",
+                "msx-white-soft:history",
+                f"{prefix}/msx/recently-played.json",
+            ),
             ("Albums", "msx-white-soft:album", f"{prefix}/msx/albums.json"),
             ("Artists", "msx-white-soft:person", f"{prefix}/msx/artists.json"),
             (
@@ -224,6 +258,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                 f"{prefix}/msx/playlists.json",
             ),
             ("Tracks", "msx-white-soft:audiotrack", f"{prefix}/msx/tracks.json"),
+            ("Search", "search", f"{prefix}/msx/search-page.json"),
         ]
         return web.json_response(
             {
@@ -381,6 +416,34 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                     "imageFiller": "default",
                 },
                 "items": items if items else [{"title": "No tracks found"}],
+            }
+        )
+
+    async def _handle_msx_recently_played(
+        self, request: web.Request
+    ) -> web.Response:
+        """Return recently played tracks as an MSX content page."""
+        player_id, device_param, _ = await self._ensure_player_for_request(request)
+        prefix = f"http://{request.host}"
+        limit = int(request.query.get("limit", "50"))
+        tracks = await self.provider.mass.music.tracks.library_items(
+            limit=limit, order_by="last_played"
+        )
+        items = [
+            self._format_msx_track(track, prefix, player_id, device_param)
+            for track in tracks
+        ]
+        return web.json_response(
+            {
+                "type": "list",
+                "headline": "Recently played",
+                "template": {
+                    "type": "separate",
+                    "layout": "0,0,2,4",
+                    "icon": "msx-white-soft:history",
+                    "imageFiller": "default",
+                },
+                "items": items if items else [{"title": "No recently played tracks"}],
             }
         )
 
@@ -789,15 +852,25 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         )
 
     async def _handle_ws(self, request: web.Request) -> web.WebSocketResponse:
-        """WebSocket for push playback — clients subscribe by player_id."""
+        """WebSocket for push playback — clients subscribe by player_id.
+
+        Uses the same player_id derivation (device_id or IP) as content and
+        stream endpoints so broadcast_stop reaches the correct client.
+        Registers the player in MA on connect so the player appears when MSX starts.
+        """
         ws = web.WebSocketResponse(heartbeat=30)
         await ws.prepare(request)
 
-        player_id, _ = self._get_player_id_and_device_param(request)
+        player_id, _, _ = await self._ensure_player_for_request(request)
         if player_id not in self._ws_clients:
             self._ws_clients[player_id] = set()
         self._ws_clients[player_id].add(ws)
-        logger.debug("WebSocket client connected for player %s", player_id)
+        logger.info(
+            "WebSocket connected: player_id=%s, clients_for_player=%d, all_players=%s",
+            player_id,
+            len(self._ws_clients[player_id]),
+            list(self._ws_clients.keys()),
+        )
 
         try:
             async for _msg in ws:
@@ -822,10 +895,17 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         """Notify subscribed WebSocket clients to start playback with metadata."""
         clients = self._ws_clients.get(player_id, set())
         if not clients:
-            logger.debug(
-                "No WebSocket clients for player %s, skip broadcast", player_id
+            logger.warning(
+                "broadcast_play: no WebSocket clients for player_id=%s (connected: %s)",
+                player_id,
+                list(self._ws_clients.keys()),
             )
             return
+        logger.info(
+            "broadcast_play: player_id=%s, sending to %d client(s)",
+            player_id,
+            len(clients),
+        )
         payload: dict[str, Any] = {"type": "play", "path": f"/stream/{player_id}"}
         if title:
             payload["title"] = title
@@ -890,11 +970,16 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         clients = self._ws_clients.get(player_id, set())
         if not clients:
             logger.warning(
-                "No WebSocket clients for player %s (have: %s), skip stop broadcast",
+                "broadcast_stop: no WebSocket clients for player_id=%s (connected: %s)",
                 player_id,
                 list(self._ws_clients.keys()),
             )
             return
+        logger.info(
+            "broadcast_stop: player_id=%s, sending to %d client(s)",
+            player_id,
+            len(clients),
+        )
         show_notification = self.provider.config.get_value(
             CONF_SHOW_STOP_NOTIFICATION, DEFAULT_SHOW_STOP_NOTIFICATION
         )
@@ -1253,6 +1338,17 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         player_id = request.match_info["player_id"]
         self.provider.on_player_activity(player_id)
         await self.provider.mass.players.cmd_stop(player_id)
+        return web.json_response({"status": "ok"})
+
+    async def _handle_quick_stop(self, request: web.Request) -> web.Response:
+        """Stop playback immediately on MSX (same signal as Disable: stop + extra broadcast/cancel)."""
+        player_id = request.match_info["player_id"]
+        self.provider.on_player_activity(player_id)
+        await self.provider.mass.players.cmd_stop(player_id)
+        self.provider.notify_play_stopped(player_id)
+        accept = request.headers.get("Accept", "")
+        if "text/html" in accept:
+            return web.Response(status=303, headers={"Location": "/"})
         return web.json_response({"status": "ok"})
 
     async def _handle_next(self, request: web.Request) -> web.Response:

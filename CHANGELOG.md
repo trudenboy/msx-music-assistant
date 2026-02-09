@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Instant Stop** — `notify_play_stopped` sends broadcast_stop + cancel_streams twice (same as Disable) so Stop in MA closes MSX immediately
+- **Pause → stop on MSX** — Pause calls `notify_play_stopped` to close the MSX player; Play calls `mass.player_queues.resume()` to re-send the current track
+- **Quick stop** — `POST /api/quick-stop/{player_id}` and dashboard button for direct HTTP control
+- **on_player_disabled** override — keeps player registered on Disable so it reappears on Enable; still broadcasts stop for instant MSX close
+- **Config option** `abort_stream_first` — abort stream before broadcast_stop (may help on some TVs)
+- **MSX plugin** — uses `[player:eject|player:hide]` chain when `showNotification=false`
 - **Architecture pivot**: from standalone HA addon to MA Player Provider plugin
 - `MSXBridgeProvider` (PlayerProvider) with embedded aiohttp HTTP server
 - `MSXPlayer` (Player) with play, pause, stop, volume, and poll support

@@ -92,3 +92,32 @@ async def test_unload_no_server(provider: MSXBridgeProvider) -> None:
 async def test_discover_players_noop(provider: MSXBridgeProvider) -> None:
     """discover_players should complete without error."""
     await provider.discover_players()
+
+
+async def test_on_player_disabled_does_not_unregister(
+    provider: MSXBridgeProvider,
+) -> None:
+    """on_player_disabled should broadcast stop and cancel streams, but NOT unregister."""
+    mock_server = Mock()
+    mock_server.broadcast_stop = Mock()
+    mock_server.cancel_streams_for_player = Mock()
+    provider.http_server = mock_server
+
+    provider.on_player_disabled("msx_test")
+
+    mock_server.broadcast_stop.assert_called_once_with("msx_test")
+    mock_server.cancel_streams_for_player.assert_called_once_with("msx_test")
+    provider.mass.players.unregister.assert_not_called()
+
+
+async def test_on_player_disabled_noop_when_no_server(
+    provider: MSXBridgeProvider,
+) -> None:
+    """on_player_disabled should not crash when http_server is None."""
+    provider.http_server = None
+    provider.on_player_disabled("msx_test")  # should not raise
+
+
+async def test_on_player_enabled_noop(provider: MSXBridgeProvider) -> None:
+    """on_player_enabled should complete without error (player stays registered)."""
+    provider.on_player_enabled("msx_test")  # should not raise
