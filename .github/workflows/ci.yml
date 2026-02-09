@@ -32,6 +32,7 @@ jobs:
           uv pip install -r requirements_all.txt
       - name: Symlink provider
         run: |
+          rm -rf "$GITHUB_WORKSPACE/ma-server/music_assistant/providers/msx_bridge"
           ln -s "$GITHUB_WORKSPACE/provider/msx_bridge" \
                 "$GITHUB_WORKSPACE/ma-server/music_assistant/providers/msx_bridge"
       - name: Run unit tests
@@ -63,6 +64,7 @@ jobs:
           uv pip install -r requirements_all.txt
       - name: Symlink provider
         run: |
+          rm -rf "$GITHUB_WORKSPACE/ma-server/music_assistant/providers/msx_bridge"
           ln -s "$GITHUB_WORKSPACE/provider/msx_bridge" \
                 "$GITHUB_WORKSPACE/ma-server/music_assistant/providers/msx_bridge"
       - name: Lint
