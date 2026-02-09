@@ -17,9 +17,16 @@
         return url + sep + "device_id=" + encodeURIComponent(deviceId);
     }
 
+    function buildSearchRequestAction(deviceId) {
+        var searchUrl = BRIDGE + "/msx/search-input.json?q={INPUT}";
+        if (deviceId) searchUrl += "&device_id=" + encodeURIComponent(deviceId);
+        var inputPluginUrl = BRIDGE + "/msx/input.html";
+        return "request:interaction:" + searchUrl + "|search:3|en|Search Music||||Search..." + "@" + inputPluginUrl;
+    }
+
     function buildMenu(deviceId) {
         return [
-            { icon: "search", label: "Search", data: addDeviceParam(BRIDGE + "/msx/search-page.json", deviceId) },
+            { icon: "search", label: "Search", data: buildSearchRequestAction(deviceId) },
             { icon: "album", label: "Albums", data: addDeviceParam(BRIDGE + "/msx/albums.json", deviceId) },
             { icon: "person", label: "Artists", data: addDeviceParam(BRIDGE + "/msx/artists.json", deviceId) },
             { icon: "queue-music", label: "Playlists", data: addDeviceParam(BRIDGE + "/msx/playlists.json", deviceId) },
