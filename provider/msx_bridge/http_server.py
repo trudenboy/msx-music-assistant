@@ -56,7 +56,9 @@ class MSXHTTPServer:
             "/msx/tvx-plugin-module.min.js",
             self._serve_static("tvx-plugin-module.min.js"),
         )
-        self.app.router.add_get("/msx/tvx-plugin.min.js", self._serve_static("tvx-plugin.min.js"))
+        self.app.router.add_get(
+            "/msx/tvx-plugin.min.js", self._serve_static("tvx-plugin.min.js")
+        )
         self.app.router.add_get("/msx/input.html", self._serve_static("input.html"))
         self.app.router.add_get("/msx/input.js", self._serve_static("input.js"))
 
@@ -71,7 +73,9 @@ class MSXHTTPServer:
         self.app.router.add_get("/msx/search.json", self._handle_msx_search)
 
         # MSX detail pages
-        self.app.router.add_get("/msx/albums/{item_id}/tracks.json", self._handle_msx_album_tracks)
+        self.app.router.add_get(
+            "/msx/albums/{item_id}/tracks.json", self._handle_msx_album_tracks
+        )
         self.app.router.add_get(
             "/msx/artists/{item_id}/albums.json", self._handle_msx_artist_albums
         )
@@ -93,11 +97,17 @@ class MSXHTTPServer:
 
         # Library API
         self.app.router.add_get("/api/albums", self._handle_albums)
-        self.app.router.add_get("/api/albums/{item_id}/tracks", self._handle_album_tracks)
+        self.app.router.add_get(
+            "/api/albums/{item_id}/tracks", self._handle_album_tracks
+        )
         self.app.router.add_get("/api/artists", self._handle_artists)
-        self.app.router.add_get("/api/artists/{item_id}/albums", self._handle_artist_albums)
+        self.app.router.add_get(
+            "/api/artists/{item_id}/albums", self._handle_artist_albums
+        )
         self.app.router.add_get("/api/playlists", self._handle_playlists)
-        self.app.router.add_get("/api/playlists/{item_id}/tracks", self._handle_playlist_tracks)
+        self.app.router.add_get(
+            "/api/playlists/{item_id}/tracks", self._handle_playlist_tracks
+        )
         self.app.router.add_get("/api/tracks", self._handle_tracks)
         self.app.router.add_get("/api/search", self._handle_search)
         self.app.router.add_get("/api/recently-played", self._handle_recently_played)
@@ -110,7 +120,9 @@ class MSXHTTPServer:
         self.app.router.add_post("/api/previous/{player_id}", self._handle_previous)
 
     @web.middleware
-    async def _cors_middleware(self, request: web.Request, handler: Any) -> web.StreamResponse:
+    async def _cors_middleware(
+        self, request: web.Request, handler: Any
+    ) -> web.StreamResponse:
         """Add CORS headers to all responses."""
         if request.method == "OPTIONS":
             return web.Response(
@@ -241,7 +253,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         limit = int(request.query.get("limit", "50"))
         offset = int(request.query.get("offset", "0"))
         albums = list(
-            await self.provider.mass.music.albums.library_items(limit=limit, offset=offset)
+            await self.provider.mass.music.albums.library_items(
+                limit=limit, offset=offset
+            )
         )
 
         # Resolve images: albums from library often lack metadata images,
@@ -283,7 +297,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         prefix = f"http://{request.host}"
         limit = int(request.query.get("limit", "50"))
         offset = int(request.query.get("offset", "0"))
-        artists = await self.provider.mass.music.artists.library_items(limit=limit, offset=offset)
+        artists = await self.provider.mass.music.artists.library_items(
+            limit=limit, offset=offset
+        )
         items = []
         for artist in artists:
             url = f"{prefix}/msx/artists/{artist.item_id}/albums.json"
@@ -347,8 +363,13 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         prefix = f"http://{request.host}"
         limit = int(request.query.get("limit", "50"))
         offset = int(request.query.get("offset", "0"))
-        tracks = await self.provider.mass.music.tracks.library_items(limit=limit, offset=offset)
-        items = [self._format_msx_track(track, prefix, player_id, device_param) for track in tracks]
+        tracks = await self.provider.mass.music.tracks.library_items(
+            limit=limit, offset=offset
+        )
+        items = [
+            self._format_msx_track(track, prefix, player_id, device_param)
+            for track in tracks
+        ]
         return web.json_response(
             {
                 "type": "list",
@@ -526,7 +547,10 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         except Exception:
             logger.warning("Failed to fetch tracks for album %s", item_id)
             tracks = []
-        items = [self._format_msx_track(track, prefix, player_id, device_param) for track in tracks]
+        items = [
+            self._format_msx_track(track, prefix, player_id, device_param)
+            for track in tracks
+        ]
         return web.json_response(
             {
                 "type": "list",
@@ -581,12 +605,18 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         item_id = request.match_info["item_id"]
         try:
             tracks = [
-                t async for t in self.provider.mass.music.playlists.tracks(item_id, "library")
+                t
+                async for t in self.provider.mass.music.playlists.tracks(
+                    item_id, "library"
+                )
             ]
         except Exception:
             logger.warning("Failed to fetch tracks for playlist %s", item_id)
             tracks = []
-        items = [self._format_msx_track(track, prefix, player_id, device_param) for track in tracks]
+        items = [
+            self._format_msx_track(track, prefix, player_id, device_param)
+            for track in tracks
+        ]
         return web.json_response(
             {
                 "type": "list",
@@ -659,7 +689,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             "aac": (ContentType.AAC, "audio/aac"),
             "flac": (ContentType.FLAC, "audio/flac"),
         }
-        codec, mime_type = content_type_map.get(output_format_str, (ContentType.MP3, "audio/mpeg"))
+        codec, mime_type = content_type_map.get(
+            output_format_str, (ContentType.MP3, "audio/mpeg")
+        )
         out_format = AudioFormat(
             content_type=codec,
             sample_rate=44100,
@@ -790,7 +822,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         """Notify subscribed WebSocket clients to start playback with metadata."""
         clients = self._ws_clients.get(player_id, set())
         if not clients:
-            logger.debug("No WebSocket clients for player %s, skip broadcast", player_id)
+            logger.debug(
+                "No WebSocket clients for player %s, skip broadcast", player_id
+            )
             return
         payload: dict[str, Any] = {"type": "play", "path": f"/stream/{player_id}"}
         if title:
@@ -825,7 +859,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                 player_id,
             )
 
-    def _register_stream(self, player_id: str, task: asyncio.Task[None], transport: Any) -> None:
+    def _register_stream(
+        self, player_id: str, task: asyncio.Task[None], transport: Any
+    ) -> None:
         """Register active stream task and transport for cancel on stop."""
         if player_id not in self._active_stream_tasks:
             self._active_stream_tasks[player_id] = set()
@@ -835,7 +871,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         if transport:
             self._active_stream_transports[player_id].add(transport)
 
-    def _unregister_stream(self, player_id: str, task: asyncio.Task[None], transport: Any) -> None:
+    def _unregister_stream(
+        self, player_id: str, task: asyncio.Task[None], transport: Any
+    ) -> None:
         """Unregister stream when done (from finally block)."""
         if player_id not in self._active_stream_tasks:
             return
@@ -901,7 +939,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             )
             if queue_item:
                 if queue_item.media_item:
-                    duration = getattr(queue_item.media_item, "duration", None) or duration
+                    duration = (
+                        getattr(queue_item.media_item, "duration", None) or duration
+                    )
                 if not duration and queue_item.duration:
                     duration = queue_item.duration
 
@@ -921,7 +961,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             "aac": (ContentType.AAC, "audio/aac"),
             "flac": (ContentType.FLAC, "audio/flac"),
         }
-        codec, mime_type = content_type_map.get(output_format_str, (ContentType.MP3, "audio/mpeg"))
+        codec, mime_type = content_type_map.get(
+            output_format_str, (ContentType.MP3, "audio/mpeg")
+        )
         out_format = AudioFormat(
             content_type=codec,
             sample_rate=44100,
@@ -1006,7 +1048,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         """List albums."""
         limit = int(request.query.get("limit", "50"))
         offset = int(request.query.get("offset", "0"))
-        albums = await self.provider.mass.music.albums.library_items(limit=limit, offset=offset)
+        albums = await self.provider.mass.music.albums.library_items(
+            limit=limit, offset=offset
+        )
         return web.json_response(
             {
                 "items": [
@@ -1037,7 +1081,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         """List artists."""
         limit = int(request.query.get("limit", "50"))
         offset = int(request.query.get("offset", "0"))
-        artists = await self.provider.mass.music.artists.library_items(limit=limit, offset=offset)
+        artists = await self.provider.mass.music.artists.library_items(
+            limit=limit, offset=offset
+        )
         return web.json_response(
             {
                 "items": [
@@ -1090,14 +1136,19 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                     }
                     for playlist in playlists
                 ],
-                "total": playlists.total if hasattr(playlists, "total") else len(playlists),
+                "total": playlists.total
+                if hasattr(playlists, "total")
+                else len(playlists),
             }
         )
 
     async def _handle_playlist_tracks(self, request: web.Request) -> web.Response:
         """List tracks for a playlist."""
         item_id = request.match_info["item_id"]
-        tracks = [t async for t in self.provider.mass.music.playlists.tracks(item_id, "library")]
+        tracks = [
+            t
+            async for t in self.provider.mass.music.playlists.tracks(item_id, "library")
+        ]
         return web.json_response(
             {
                 "items": [self._format_track(track) for track in tracks],
@@ -1108,7 +1159,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         """List tracks."""
         limit = int(request.query.get("limit", "50"))
         offset = int(request.query.get("offset", "0"))
-        tracks = await self.provider.mass.music.tracks.library_items(limit=limit, offset=offset)
+        tracks = await self.provider.mass.music.tracks.library_items(
+            limit=limit, offset=offset
+        )
         return web.json_response(
             {
                 "items": [self._format_track(track) for track in tracks],
@@ -1120,7 +1173,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         """Search the music library."""
         query = request.query.get("q", "")
         if not query:
-            return web.json_response({"error": "Missing query parameter 'q'"}, status=400)
+            return web.json_response(
+                {"error": "Missing query parameter 'q'"}, status=400
+            )
         limit = int(request.query.get("limit", "20"))
         results = await self.provider.mass.music.search(query, limit=limit)
         return web.json_response(
@@ -1179,7 +1234,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         track_uri = body.get("track_uri")
         player_id = body.get("player_id")
         if not track_uri or not player_id:
-            return web.json_response({"error": "Missing track_uri or player_id"}, status=400)
+            return web.json_response(
+                {"error": "Missing track_uri or player_id"}, status=400
+            )
 
         await self.provider.mass.player_queues.play_media(player_id, track_uri)
         return web.json_response({"status": "ok"})
@@ -1229,7 +1286,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         else:
             remote = request.remote
             ip = remote if remote else "0_0_0_0"
-            sanitized = PLAYER_ID_SANITIZE_RE.sub("_", ip.replace(".", "_")).strip("_") or "ip"
+            sanitized = (
+                PLAYER_ID_SANITIZE_RE.sub("_", ip.replace(".", "_")).strip("_") or "ip"
+            )
             player_id = f"{MSX_PLAYER_ID_PREFIX}{sanitized}"
             param = ""
         return player_id, param
@@ -1297,7 +1356,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
     async def _get_album_image_fallback(self, album: Any) -> str | None:
         """Get album image from its first track (albums often lack metadata images)."""
         try:
-            tracks = await self.provider.mass.music.albums.tracks(album.item_id, "library")
+            tracks = await self.provider.mass.music.albums.tracks(
+                album.item_id, "library"
+            )
             for track in tracks:
                 if hasattr(track, "image") and track.image:
                     return self.provider.mass.metadata.get_image_url(track.image)

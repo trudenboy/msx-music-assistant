@@ -186,15 +186,15 @@ async def test_poll_noop_when_idle(player: MSXPlayer) -> None:
 # --- Grouping ---
 
 
-async def test_set_members_add_and_remove(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_set_members_add_and_remove(provider: object, mass_mock: Mock) -> None:
     """set_members should add and remove group members."""
     leader = MSXPlayer(provider, "msx_leader", name="Leader TV", output_format="mp3")
     leader.update_state = Mock()
     member = MSXPlayer(provider, "msx_member", name="Member TV", output_format="mp3")
     member.update_state = Mock()
-    mass_mock.players.get = Mock(side_effect=lambda pid: member if pid == "msx_member" else None)
+    mass_mock.players.get = Mock(
+        side_effect=lambda pid: member if pid == "msx_member" else None
+    )
 
     await leader.set_members(player_ids_to_add=["msx_member"])
 
@@ -273,7 +273,9 @@ async def test_play_media_no_propagation_when_empty_group(
     mass_mock.players.play_media.assert_not_called()
 
 
-async def test_stop_propagates_to_group_members(provider: object, mass_mock: Mock) -> None:
+async def test_stop_propagates_to_group_members(
+    provider: object, mass_mock: Mock
+) -> None:
     """stop() should propagate to group members when leader."""
     leader = MSXPlayer(provider, "msx_leader", name="Leader TV", output_format="mp3")
     leader.update_state = Mock()
