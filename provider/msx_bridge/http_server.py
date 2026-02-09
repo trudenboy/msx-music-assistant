@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 from pathlib import Path
@@ -41,6 +42,8 @@ class MSXHTTPServer:
         self.app = web.Application(middlewares=[self._cors_middleware])
         self._runner: web.AppRunner | None = None
         self._ws_clients: dict[str, set[web.WebSocketResponse]] = {}
+        self._active_stream_tasks: dict[str, set[asyncio.Task[None]]] = {}
+        self._active_stream_transports: dict[str, set[Any]] = {}
         self._setup_routes()
 
     def _setup_routes(self) -> None:
@@ -600,7 +603,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
 
     # --- MSX Audio Playback ---
 
-    async def _handle_msx_audio(self, request: web.Request) -> web.StreamResponse:
+    async def _handle_msx_audio(self, request: web.Request) -> web.StreamResponse:  # noqa: PLR0915
         """Trigger playback via MA queue and stream audio to MSX."""
         player_id = request.match_info["player_id"]
         uri = request.query.get("uri")
@@ -689,17 +692,57 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         response = web.StreamResponse(status=200, headers=headers)
         await response.prepare(request)
 
+        transport = getattr(request, "transport", None)
+        player = self.provider.mass.players.get(player_id)
+        if not player or not getattr(player, "current_media", None):
+            if transport and hasattr(transport, "abort"):
+                transport.abort()
+            return response
+
+        chunk_queue_audio: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=8)
+
+        async def producer_audio() -> None:
+            try:
+                async for chunk in get_ffmpeg_stream(
+                    audio_input=audio_source,
+                    input_format=pcm_format,
+                    output_format=out_format,
+                ):
+                    await chunk_queue_audio.put(chunk)
+            finally:
+                with contextlib.suppress(asyncio.QueueFull):
+                    chunk_queue_audio.put_nowait(None)
+
+        async def stream_loop() -> None:
+            producer_task = None
+            try:
+                producer_task = asyncio.create_task(producer_audio())
+                while True:
+                    chunk = await chunk_queue_audio.get()
+                    if chunk is None:
+                        break
+                    await response.write(chunk)
+            except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
+                logger.debug("Client disconnected from audio stream %s", player_id)
+            except asyncio.CancelledError:
+                logger.debug("Audio stream cancelled for player %s", player_id)
+                raise
+            finally:
+                if producer_task and not producer_task.done():
+                    producer_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await producer_task
+
+        stream_task: asyncio.Task[None] = asyncio.create_task(stream_loop())
+        self._register_stream(player_id, stream_task, transport)
         try:
-            async for chunk in get_ffmpeg_stream(
-                audio_input=audio_source,
-                input_format=pcm_format,
-                output_format=out_format,
-            ):
-                await response.write(chunk)
-        except ConnectionResetError:
-            logger.debug("Client disconnected from audio stream %s", player_id)
+            await stream_task
+        except asyncio.CancelledError:
+            raise
         except Exception:
             logger.exception("Audio stream error for player %s", player_id)
+        finally:
+            self._unregister_stream(player_id, stream_task, transport)
 
         return response
 
@@ -763,6 +806,47 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             if not ws.closed:
                 self.provider.mass.create_task(self._ws_send(ws, msg))
 
+    def cancel_streams_for_player(self, player_id: str) -> None:
+        """Cancel stream tasks and abort connections for the given player."""
+        tasks = self._active_stream_tasks.pop(player_id, set())
+        transports = self._active_stream_transports.pop(player_id, set())
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        for transport in transports:
+            with contextlib.suppress(Exception):
+                if transport and hasattr(transport, "abort"):
+                    transport.abort()
+        if tasks or transports:
+            logger.debug(
+                "Cancelled %d task(s), aborted %d transport(s) for player %s",
+                len(tasks),
+                len(transports),
+                player_id,
+            )
+
+    def _register_stream(self, player_id: str, task: asyncio.Task[None], transport: Any) -> None:
+        """Register active stream task and transport for cancel on stop."""
+        if player_id not in self._active_stream_tasks:
+            self._active_stream_tasks[player_id] = set()
+            self._active_stream_transports[player_id] = set()
+        if task:
+            self._active_stream_tasks[player_id].add(task)
+        if transport:
+            self._active_stream_transports[player_id].add(transport)
+
+    def _unregister_stream(self, player_id: str, task: asyncio.Task[None], transport: Any) -> None:
+        """Unregister stream when done (from finally block)."""
+        if player_id not in self._active_stream_tasks:
+            return
+        if task:
+            self._active_stream_tasks[player_id].discard(task)
+        if transport:
+            self._active_stream_transports[player_id].discard(transport)
+        if not self._active_stream_tasks[player_id]:
+            del self._active_stream_tasks[player_id]
+            del self._active_stream_transports[player_id]
+
     def broadcast_stop(self, player_id: str) -> None:
         """Notify subscribed WebSocket clients to stop playback."""
         clients = self._ws_clients.get(player_id, set())
@@ -794,7 +878,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
 
     # --- Stream Proxy ---
 
-    async def _handle_stream(self, request: web.Request) -> web.StreamResponse:
+    async def _handle_stream(self, request: web.Request) -> web.StreamResponse:  # noqa: PLR0915
         """Stream audio from MA to the TV using internal API."""
         player_id = request.match_info["player_id"]
         self.provider.on_player_activity(player_id)
@@ -860,17 +944,59 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         response = web.StreamResponse(status=200, headers=headers)
         await response.prepare(request)
 
+        transport = getattr(request, "transport", None)
+
+        # Re-check: stop may have been called while we were preparing
+        player = self.provider.mass.players.get(player_id)
+        if not player or not getattr(player, "current_media", None):
+            if transport and hasattr(transport, "abort"):
+                transport.abort()
+            return response
+
+        chunk_queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=8)
+
+        async def producer() -> None:
+            try:
+                async for chunk in get_ffmpeg_stream(
+                    audio_input=audio_source,
+                    input_format=pcm_format,
+                    output_format=out_format,
+                ):
+                    await chunk_queue.put(chunk)
+            finally:
+                with contextlib.suppress(asyncio.QueueFull):
+                    chunk_queue.put_nowait(None)
+
+        async def stream_loop() -> None:
+            producer_task: asyncio.Task[None] | None = None
+            try:
+                producer_task = asyncio.create_task(producer())
+                while True:
+                    chunk = await chunk_queue.get()
+                    if chunk is None:
+                        break
+                    await response.write(chunk)
+            except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
+                logger.debug("Client disconnected from stream %s", player_id)
+            except asyncio.CancelledError:
+                logger.debug("Stream cancelled for player %s", player_id)
+                raise
+            finally:
+                if producer_task and not producer_task.done():
+                    producer_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await producer_task
+
+        stream_task: asyncio.Task[None] = asyncio.create_task(stream_loop())
+        self._register_stream(player_id, stream_task, transport)
         try:
-            async for chunk in get_ffmpeg_stream(
-                audio_input=audio_source,
-                input_format=pcm_format,
-                output_format=out_format,
-            ):
-                await response.write(chunk)
-        except ConnectionResetError:
-            logger.debug("Client disconnected from stream %s", player_id)
+            await stream_task
+        except asyncio.CancelledError:
+            raise
         except Exception:
             logger.exception("Stream error for player %s", player_id)
+        finally:
+            self._unregister_stream(player_id, stream_task, transport)
 
         return response
 
