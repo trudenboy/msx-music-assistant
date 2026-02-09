@@ -7,7 +7,10 @@ Stream your [Music Assistant](https://music-assistant.io/) library to Smart TVs 
 - **MA Player Provider** — runs inside the Music Assistant server process, no separate containers or addons
 - **MSX Native UI** — browse albums, artists, playlists, and tracks with remote-control-friendly navigation
 - **Library Browsing** — drill into album tracks, artist albums, playlist tracks, and search results
-- **Audio Playback** — stream audio to the TV through MA's queue system with automatic stream proxy
+- **Audio Playback** — stream audio to the TV through MA's queue system with PCM→ffmpeg encoding
+- **Dynamic Player Registration** — TVs register as MA players on-demand via device ID or IP, with automatic idle timeout cleanup
+- **Multi-TV Support** — each TV gets its own unique player, identified by MSX device ID
+- **WebSocket Push** — MA-initiated playback (play/stop) pushed to TVs in real-time via WebSocket
 - **Universal TV Support** — works on any TV/device running the MSX app (Samsung Tizen, LG webOS, Android TV, Fire TV, Apple TV, web browsers)
 - **Configurable Output** — MP3, AAC, or FLAC output format
 - **Local Network** — runs entirely on your LAN, no cloud dependencies
@@ -110,14 +113,17 @@ You can also visit `http://<YOUR_SERVER_IP>:8099/` in a browser for a status das
 
 ## HTTP Endpoints
 
-### MSX Bootstrap
+### MSX Bootstrap & Static Files
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/` | Status dashboard (HTML) |
 | GET | `/msx/start.json` | MSX start configuration |
-| GET | `/msx/plugin.html` | MSX interaction plugin (HTML/JS) |
-| GET | `/msx/tvx-plugin-module.min.js` | TVX plugin library |
+| GET | `/msx/plugin.html` | MSX interaction plugin (device ID detection, WebSocket, menu) |
+| GET | `/msx/input.html` | MSX Input Plugin wrapper (search keyboard) |
+| GET | `/msx/input.js` | Input Plugin logic |
+| GET | `/msx/tvx-plugin-module.min.js` | TVX plugin module library |
+| GET | `/msx/tvx-plugin.min.js` | TVX plugin library |
 
 ### MSX Content Pages (native JSON navigation)
 
@@ -128,6 +134,8 @@ You can also visit `http://<YOUR_SERVER_IP>:8099/` in a browser for a status das
 | GET | `/msx/artists.json` | Artists list with drill-down actions |
 | GET | `/msx/playlists.json` | Playlists list with drill-down actions |
 | GET | `/msx/tracks.json` | Tracks list with play actions |
+| GET | `/msx/search-page.json` | Search page with Input Plugin keyboard trigger |
+| GET | `/msx/search-input.json?q=...` | Search results from Input Plugin keyboard |
 | GET | `/msx/search.json?q=...` | Search results (artists, albums, tracks) |
 
 ### MSX Detail Pages
@@ -169,6 +177,12 @@ You can also visit `http://<YOUR_SERVER_IP>:8099/` in a browser for a status das
 | POST | `/api/next/{player_id}` | Next track |
 | POST | `/api/previous/{player_id}` | Previous track |
 
+### WebSocket
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/ws?device_id=...` | WebSocket for push playback (MA → MSX play/stop notifications) |
+
 ### Utility
 
 | Method | Path | Description |
@@ -177,12 +191,14 @@ You can also visit `http://<YOUR_SERVER_IP>:8099/` in a browser for a status das
 
 ## Configuration
 
-The provider exposes two config entries in the MA UI:
+The provider exposes four config entries in the MA UI:
 
 | Key | Default | Description |
 |-----|---------|-------------|
 | `http_port` | `8099` | Port for the embedded HTTP server |
 | `output_format` | `mp3` | Audio format for streaming (`mp3`, `aac`, `flac`) |
+| `player_idle_timeout` | `30` | Unregister idle MSX players after this many minutes |
+| `show_stop_notification` | `false` | Show confirmation dialog on MSX when stopping playback from MA |
 
 ## Development
 
@@ -221,13 +237,17 @@ See [CLAUDE.md](CLAUDE.md) for detailed development guidance and MA conventions.
 ```
 provider/msx_bridge/
 ├── __init__.py        # setup(), get_config_entries() — provider entry point
-├── provider.py        # MSXBridgeProvider(PlayerProvider) — lifecycle, player registration
-├── player.py          # MSXPlayer(Player) — Smart TV as MA player
-├── http_server.py     # MSXHTTPServer — aiohttp routes for MSX + API
-├── constants.py       # Config keys and defaults
+├── provider.py        # MSXBridgeProvider(PlayerProvider) — lifecycle, dynamic player registration, idle timeout
+├── player.py          # MSXPlayer(Player) — Smart TV as MA player, WebSocket push notifications
+├── http_server.py     # MSXHTTPServer — aiohttp routes for MSX + API + WebSocket
+├── constants.py       # Config keys and defaults (4 entries)
 ├── manifest.json      # Provider metadata for MA
 └── static/
-    └── tvx-plugin-module.min.js  # TVX plugin library
+    ├── plugin.html             # MSX interaction plugin (device ID, WebSocket, menu)
+    ├── input.html              # MSX Input Plugin wrapper (search keyboard)
+    ├── input.js                # Input Plugin logic
+    ├── tvx-plugin-module.min.js # TVX plugin module library
+    └── tvx-plugin.min.js       # TVX plugin library
 
 tests/
 ├── conftest.py        # Shared fixtures (mock MA, players, HTTP server)
@@ -238,7 +258,8 @@ tests/
 └── integration/       # Integration tests (require running MA server)
 
 scripts/
-└── link-to-ma.sh      # Setup venv + symlink provider into MA server
+├── link-to-ma.sh      # Setup venv + symlink provider into MA server
+└── test-server.sh     # Start/stop/status/log for local MA dev server
 ```
 
 ## Contributing

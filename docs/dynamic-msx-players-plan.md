@@ -1,5 +1,7 @@
 # План: Динамическая регистрация MSX players
 
+> **STATUS: IMPLEMENTED** — This plan has been fully implemented. Code lives in `provider.py` (dynamic registration, idle timeout loop, `get_or_register_player()`), `http_server.py` (`_ensure_player_for_request()`, `_get_player_id_and_device_param()`), and `static/plugin.html` (device ID detection via `TVXVideoPlugin.requestDeviceId()`).
+
 ## 1. Результаты анализа документации MSX
 
 ### 1.1 Device ID (MSX Plugin API)
