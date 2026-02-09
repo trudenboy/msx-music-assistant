@@ -90,6 +90,9 @@ async def get_config_entries(
             label="Abort stream before broadcast stop",
             required=False,
             default_value=DEFAULT_ABORT_STREAM_FIRST,
-            description="When stopping: abort the stream connection first, then send WebSocket stop. May stop playback faster on some TVs.",
+            description=(
+                "When stopping: abort stream first, then send WebSocket stop. "
+                "May stop playback faster on some TVs."
+            ),
         ),
     )

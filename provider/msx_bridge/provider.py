@@ -43,9 +43,7 @@ class MSXBridgeProvider(PlayerProvider):
         port = cast("int", self.config.get_value(CONF_HTTP_PORT, DEFAULT_HTTP_PORT))
         self.http_server = MSXHTTPServer(self, port)
         await self.http_server.start()
-        self.logger.info(
-            "MSX Bridge provider initialized, HTTP server on port %s", port
-        )
+        self.logger.info("MSX Bridge provider initialized, HTTP server on port %s", port)
 
     async def loaded_in_mass(self) -> None:
         """Start idle timeout task after provider is loaded."""
@@ -83,9 +81,7 @@ class MSXBridgeProvider(PlayerProvider):
         """
         # Wait for any pending unregister to complete (race condition handling)
         if pending_event := self._pending_unregisters.get(player_id):
-            self.logger.debug(
-                "Waiting for pending unregister of %s before registering", player_id
-            )
+            self.logger.debug("Waiting for pending unregister of %s before registering", player_id)
             await pending_event.wait()
         existing = self.mass.players.get(player_id, raise_unavailable=False)
         if existing and isinstance(existing, MSXPlayer):
@@ -122,14 +118,14 @@ class MSXBridgeProvider(PlayerProvider):
         self._player_last_activity[player_id] = time.time()
 
     def on_player_disabled(self, player_id: str) -> None:
-        """Called when player is disabled — do NOT unregister (base does unregister).
+        """Handle player disabled: do not unregister (base would unregister).
 
         MSX players are registered on demand; unregister on disable would remove them
         from the list. On enable, discovery is empty so the player would not come back
         until the TV reconnects. We keep the player registered but disabled so it stays
         visible in the list when re-enabled.
 
-        We still stop playback on TV by broadcasting stop and cancelling streams.
+        Still stop playback on TV by broadcasting stop and cancelling streams.
         """
         if self.http_server:
             self.http_server.broadcast_stop(player_id)
@@ -137,9 +133,8 @@ class MSXBridgeProvider(PlayerProvider):
         # Do NOT call super() — base PlayerProvider unregisters the player here.
 
     def on_player_enabled(self, player_id: str) -> None:
-        """Called when player is enabled — no-op, player already registered."""
+        """Handle player enabled: no-op, player already registered."""
         # Player was never unregistered (see on_player_disabled), so nothing to do.
-        pass
 
     def notify_play_started(
         self,
@@ -166,20 +161,21 @@ class MSXBridgeProvider(PlayerProvider):
         Sends broadcast_stop + cancel_streams twice — same as Disable flow, which
         stops playback on MSX instantly (vs single signal with ~30s delay).
         """
-        if not self.http_server:
+        server = self.http_server
+        if not server:
             return
         abort_first = cast(
-            bool,
+            "bool",
             self.config.get_value(CONF_ABORT_STREAM_FIRST, DEFAULT_ABORT_STREAM_FIRST),
         )
 
         def _send() -> None:
             if abort_first:
-                self.http_server.cancel_streams_for_player(player_id)
-                self.http_server.broadcast_stop(player_id)
+                server.cancel_streams_for_player(player_id)
+                server.broadcast_stop(player_id)
             else:
-                self.http_server.broadcast_stop(player_id)
-                self.http_server.cancel_streams_for_player(player_id)
+                server.broadcast_stop(player_id)
+                server.cancel_streams_for_player(player_id)
 
         _send()
         _send()
@@ -200,9 +196,7 @@ class MSXBridgeProvider(PlayerProvider):
         """Background task: unregister players idle longer than configured timeout."""
         timeout_minutes = cast(
             "int",
-            self.config.get_value(
-                CONF_PLAYER_IDLE_TIMEOUT, DEFAULT_PLAYER_IDLE_TIMEOUT
-            ),
+            self.config.get_value(CONF_PLAYER_IDLE_TIMEOUT, DEFAULT_PLAYER_IDLE_TIMEOUT),
         )
         interval_seconds = 60
         while not self.mass.closing:
@@ -222,6 +216,4 @@ class MSXBridgeProvider(PlayerProvider):
                         player.player_id,
                         timeout_minutes,
                     )
-                    self.mass.create_task(
-                        self._handle_player_unregister(player.player_id)
-                    )
+                    self.mass.create_task(self._handle_player_unregister(player.player_id))
