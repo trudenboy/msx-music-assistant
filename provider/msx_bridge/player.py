@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from music_assistant_models.enums import PlaybackState, PlayerFeature, PlayerType
 from music_assistant_models.player import DeviceInfo
@@ -71,18 +71,12 @@ class MSXPlayer(Player):
         image_url = media.image_url
         duration = media.duration
         if media.source_id and media.queue_item_id:
-            queue_item = self.mass.player_queues.get_item(
-                media.source_id, media.queue_item_id
-            )
+            queue_item = self.mass.player_queues.get_item(media.source_id, media.queue_item_id)
             if queue_item:
                 if queue_item.media_item:
                     title = getattr(queue_item.media_item, "name", None) or title
-                    artist = (
-                        getattr(queue_item.media_item, "artist_str", None) or artist
-                    )
-                    duration = (
-                        getattr(queue_item.media_item, "duration", None) or duration
-                    )
+                    artist = getattr(queue_item.media_item, "artist_str", None) or artist
+                    duration = getattr(queue_item.media_item, "duration", None) or duration
                 if queue_item.image:
                     image_url = self.mass.metadata.get_image_url(
                         queue_item.image, size=500, prefer_stream_server=True
@@ -92,7 +86,7 @@ class MSXPlayer(Player):
                 if title is None and queue_item.name:
                     title = queue_item.name
 
-        self.provider.notify_play_started(
+        cast("MSXBridgeProvider", self.provider).notify_play_started(
             self.player_id,
             title=title,
             artist=artist,
@@ -111,13 +105,8 @@ class MSXPlayer(Player):
         """Handle PAUSE command."""
         self.logger.info("pause on %s", self.display_name)
         # Snapshot the elapsed time before pausing
-        if (
-            self._attr_elapsed_time is not None
-            and self._attr_elapsed_time_last_updated is not None
-        ):
-            self._attr_elapsed_time += (
-                time.time() - self._attr_elapsed_time_last_updated
-            )
+        if self._attr_elapsed_time is not None and self._attr_elapsed_time_last_updated is not None:
+            self._attr_elapsed_time += time.time() - self._attr_elapsed_time_last_updated
         self._attr_playback_state = PlaybackState.PAUSED
         self._attr_elapsed_time_last_updated = time.time()
         self.update_state()
@@ -131,7 +120,7 @@ class MSXPlayer(Player):
         self._attr_elapsed_time_last_updated = None
         self.current_stream_url = None
         self.update_state()
-        self.provider.notify_play_stopped(self.player_id)
+        cast("MSXBridgeProvider", self.provider).notify_play_stopped(self.player_id)
 
     async def volume_set(self, volume_level: int) -> None:
         """Handle VOLUME_SET command."""

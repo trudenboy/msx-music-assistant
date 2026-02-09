@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
-from typing import cast
+from typing import Any, cast
 
 from music_assistant.models.player_provider import PlayerProvider
 
@@ -30,7 +30,7 @@ class MSXBridgeProvider(PlayerProvider):
     _pending_unregisters: dict[str, asyncio.Event]
     _timeout_task: asyncio.Task[None] | None = None
 
-    def __init__(self, *args: object, **kwargs: object) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the provider."""
         super().__init__(*args, **kwargs)
         self._player_last_activity = {}
@@ -41,9 +41,7 @@ class MSXBridgeProvider(PlayerProvider):
         port = cast("int", self.config.get_value(CONF_HTTP_PORT, DEFAULT_HTTP_PORT))
         self.http_server = MSXHTTPServer(self, port)
         await self.http_server.start()
-        self.logger.info(
-            "MSX Bridge provider initialized, HTTP server on port %s", port
-        )
+        self.logger.info("MSX Bridge provider initialized, HTTP server on port %s", port)
 
     async def loaded_in_mass(self) -> None:
         """Start idle timeout task after provider is loaded."""
@@ -81,9 +79,7 @@ class MSXBridgeProvider(PlayerProvider):
         """
         # Wait for any pending unregister to complete (race condition handling)
         if pending_event := self._pending_unregisters.get(player_id):
-            self.logger.debug(
-                "Waiting for pending unregister of %s before registering", player_id
-            )
+            self.logger.debug("Waiting for pending unregister of %s before registering", player_id)
             await pending_event.wait()
         existing = self.mass.players.get(player_id, raise_unavailable=False)
         if existing and isinstance(existing, MSXPlayer):
@@ -159,9 +155,7 @@ class MSXBridgeProvider(PlayerProvider):
         """Background task: unregister players idle longer than configured timeout."""
         timeout_minutes = cast(
             "int",
-            self.config.get_value(
-                CONF_PLAYER_IDLE_TIMEOUT, DEFAULT_PLAYER_IDLE_TIMEOUT
-            ),
+            self.config.get_value(CONF_PLAYER_IDLE_TIMEOUT, DEFAULT_PLAYER_IDLE_TIMEOUT),
         )
         interval_seconds = 60
         while not self.mass.closing:
@@ -181,6 +175,4 @@ class MSXBridgeProvider(PlayerProvider):
                         player.player_id,
                         timeout_minutes,
                     )
-                    self.mass.create_task(
-                        self._handle_player_unregister(player.player_id)
-                    )
+                    self.mass.create_task(self._handle_player_unregister(player.player_id))
