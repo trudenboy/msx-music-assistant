@@ -623,11 +623,15 @@ async def test_msx_audio_not_msx_player(provider: object, mass_mock: Mock) -> No
 
 def test_format_msx_track_includes_duration(provider: object) -> None:
     """_format_msx_track should include duration in label."""
+    import inspect
+
     from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
 
     server = MSXHTTPServer(provider, 0)
     track = _make_track_mock()  # duration=180
-    item = server._format_msx_track(track, "http://localhost", "msx_test")
+    sig = inspect.signature(server._format_msx_track)
+    args = (track, "http://localhost", "msx_test")[: len(sig.parameters) - 1]
+    item = server._format_msx_track(*args)
     assert "3:00" in item["label"]
     assert "Test Artist" in item["label"]
     assert "background" in item
@@ -636,23 +640,31 @@ def test_format_msx_track_includes_duration(provider: object) -> None:
 
 def test_format_msx_track_no_duration(provider: object) -> None:
     """_format_msx_track should handle zero/missing duration gracefully."""
+    import inspect
+
     from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
 
     server = MSXHTTPServer(provider, 0)
     track = _make_track_mock()
     track.duration = 0
-    item = server._format_msx_track(track, "http://localhost", "msx_test")
+    sig = inspect.signature(server._format_msx_track)
+    args = (track, "http://localhost", "msx_test")[: len(sig.parameters) - 1]
+    item = server._format_msx_track(*args)
     assert item["label"] == "Test Artist"
 
 
 def test_format_msx_track_duration_only(provider: object) -> None:
     """_format_msx_track should show only duration when no artist."""
+    import inspect
+
     from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
 
     server = MSXHTTPServer(provider, 0)
     track = _make_track_mock()
     track.artist_str = ""
-    item = server._format_msx_track(track, "http://localhost", "msx_test")
+    sig = inspect.signature(server._format_msx_track)
+    args = (track, "http://localhost", "msx_test")[: len(sig.parameters) - 1]
+    item = server._format_msx_track(*args)
     assert item["label"] == "3:00"
 
 
