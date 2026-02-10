@@ -22,6 +22,15 @@ from .constants import (
     MSX_PLAYER_ID_PREFIX,
     PLAYER_ID_SANITIZE_RE,
 )
+from .mappers import (
+    append_device_param,
+    get_image_url,
+    map_album_to_msx,
+    map_artist_to_msx,
+    map_playlist_to_msx,
+    map_track_to_msx,
+)
+from .models import MsxContent, MsxItem, MsxTemplate
 from .player import MSXPlayer
 
 if TYPE_CHECKING:
@@ -228,8 +237,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
     async def _handle_msx_menu(self, request: web.Request) -> web.Response:
         """Return the main library menu as an MSX content page."""
         _, device_param, _ = await self._ensure_player_for_request(request)
-        host = request.host
-        prefix = f"http://{host}"
+        prefix = f"http://{request.host}"
         items = [
             (
                 "Recently played",
@@ -246,26 +254,24 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             ("Tracks", "msx-white-soft:audiotrack", f"{prefix}/msx/tracks.json"),
             ("Search", "search", f"{prefix}/msx/search-page.json"),
         ]
-        return web.json_response(
-            {
-                "type": "list",
-                "headline": "Music Assistant",
-                "template": {
-                    "type": "separate",
-                    "layout": "0,0,2,4",
-                    "icon": "msx-white-soft:music-note",
-                    "action": "content:{context:content}",
-                },
-                "items": [
-                    {
-                        "label": label,
-                        "icon": icon,
-                        "content": self._append_device_param(url, device_param),
-                    }
-                    for label, icon, url in items
-                ],
-            }
+        content = MsxContent(
+            headline="Music Assistant",
+            template=MsxTemplate(
+                type="separate",
+                layout="0,0,2,4",
+                icon="msx-white-soft:music-note",
+                action="content:{context:content}",
+            ),
+            items=[
+                MsxItem(
+                    label=label,
+                    icon=icon,
+                    content=append_device_param(url, device_param),
+                )
+                for label, icon, url in items
+            ],
         )
+        return web.json_response(content.model_dump(by_alias=True, exclude_none=True))
 
     async def _handle_msx_albums(self, request: web.Request) -> web.Response:
         """Return albums as an MSX content page."""
@@ -273,42 +279,21 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         prefix = f"http://{request.host}"
         limit = int(request.query.get("limit", "50"))
         offset = int(request.query.get("offset", "0"))
-        albums = list(
-            await self.provider.mass.music.albums.library_items(limit=limit, offset=offset)
-        )
+        albums = await self.provider.mass.music.albums.library_items(limit=limit, offset=offset)
 
-        # Resolve images: albums from library often lack metadata images,
-        # so fall back to the first track's image (which has the album cover).
-        async def resolve_image(album: Any) -> str | None:
-            url = self._get_image_url(album)
-            if url:
-                return url
-            return await self._get_album_image_fallback(album)
-
-        images = await asyncio.gather(*(resolve_image(a) for a in albums))
-        items = []
-        for album, image in zip(albums, images, strict=True):
-            url = f"{prefix}/msx/albums/{album.item_id}/tracks.json?provider={album.provider}"
-            items.append(
-                {
-                    "title": album.name,
-                    "label": getattr(album, "artist_str", ""),
-                    "image": image,
-                    "action": f"content:{self._append_device_param(url, device_param)}",
-                }
-            )
-        return web.json_response(
-            {
-                "type": "list",
-                "headline": "Albums",
-                "template": {
-                    "type": "separate",
-                    "layout": "0,0,2,4",
-                    "imageFiller": "default",
-                },
-                "items": items if items else [{"title": "No albums found"}],
-            }
+        items = await asyncio.gather(
+            *(map_album_to_msx(a, prefix, self.provider, device_param) for a in albums)
         )
+        content = MsxContent(
+            headline="Albums",
+            template=MsxTemplate(
+                type="separate",
+                layout="0,0,2,4",
+                image_filler="default",
+            ),
+            items=items if items else [MsxItem(title="No albums found")],
+        )
+        return web.json_response(content.model_dump(by_alias=True, exclude_none=True))
 
     async def _handle_msx_artists(self, request: web.Request) -> web.Response:
         """Return artists as an MSX content page."""
@@ -317,29 +302,19 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         limit = int(request.query.get("limit", "50"))
         offset = int(request.query.get("offset", "0"))
         artists = await self.provider.mass.music.artists.library_items(limit=limit, offset=offset)
-        items = []
-        for artist in artists:
-            url = f"{prefix}/msx/artists/{artist.item_id}/albums.json"
-            items.append(
-                {
-                    "title": artist.name,
-                    "image": self._get_image_url(artist),
-                    "action": f"content:{self._append_device_param(url, device_param)}",
-                }
-            )
-        return web.json_response(
-            {
-                "type": "list",
-                "headline": "Artists",
-                "template": {
-                    "type": "separate",
-                    "layout": "0,0,2,4",
-                    "icon": "msx-white-soft:person",
-                    "imageFiller": "default",
-                },
-                "items": items if items else [{"title": "No artists found"}],
-            }
+
+        items = [map_artist_to_msx(a, prefix, self.provider, device_param) for a in artists]
+        content = MsxContent(
+            headline="Artists",
+            template=MsxTemplate(
+                type="separate",
+                layout="0,0,2,4",
+                icon="msx-white-soft:person",
+                image_filler="default",
+            ),
+            items=items if items else [MsxItem(title="No artists found")],
         )
+        return web.json_response(content.model_dump(by_alias=True, exclude_none=True))
 
     async def _handle_msx_playlists(self, request: web.Request) -> web.Response:
         """Return playlists as an MSX content page."""
@@ -350,29 +325,19 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         playlists = await self.provider.mass.music.playlists.library_items(
             limit=limit, offset=offset
         )
-        items = []
-        for playlist in playlists:
-            url = f"{prefix}/msx/playlists/{playlist.item_id}/tracks.json"
-            items.append(
-                {
-                    "title": playlist.name,
-                    "image": self._get_image_url(playlist),
-                    "action": f"content:{self._append_device_param(url, device_param)}",
-                }
-            )
-        return web.json_response(
-            {
-                "type": "list",
-                "headline": "Playlists",
-                "template": {
-                    "type": "separate",
-                    "layout": "0,0,2,4",
-                    "icon": "msx-white-soft:playlist-play",
-                    "imageFiller": "default",
-                },
-                "items": items if items else [{"title": "No playlists found"}],
-            }
+
+        items = [map_playlist_to_msx(p, prefix, self.provider, device_param) for p in playlists]
+        content = MsxContent(
+            headline="Playlists",
+            template=MsxTemplate(
+                type="separate",
+                layout="0,0,2,4",
+                icon="msx-white-soft:playlist-play",
+                image_filler="default",
+            ),
+            items=items if items else [MsxItem(title="No playlists found")],
         )
+        return web.json_response(content.model_dump(by_alias=True, exclude_none=True))
 
     async def _handle_msx_tracks(self, request: web.Request) -> web.Response:
         """Return tracks as an MSX content page."""
@@ -381,49 +346,49 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         limit = int(request.query.get("limit", "50"))
         offset = int(request.query.get("offset", "0"))
         tracks = await self.provider.mass.music.tracks.library_items(limit=limit, offset=offset)
-        items = [self._format_msx_track(track, prefix, player_id, device_param) for track in tracks]
-        return web.json_response(
-            {
-                "type": "list",
-                "headline": "Tracks",
-                "template": {
-                    "type": "separate",
-                    "layout": "0,0,2,4",
-                    "icon": "msx-white-soft:audiotrack",
-                    "imageFiller": "default",
-                },
-                "items": items if items else [{"title": "No tracks found"}],
-            }
+
+        items = [
+            map_track_to_msx(t, prefix, player_id, self.provider, device_param) for t in tracks
+        ]
+        content = MsxContent(
+            headline="Tracks",
+            template=MsxTemplate(
+                type="separate",
+                layout="0,0,2,4",
+                icon="msx-white-soft:audiotrack",
+                image_filler="default",
+            ),
+            items=items if items else [MsxItem(title="No tracks found")],
         )
+        return web.json_response(content.model_dump(by_alias=True, exclude_none=True))
 
     async def _handle_msx_recently_played(self, request: web.Request) -> web.Response:
         """Return recently played tracks as an MSX content page."""
         player_id, device_param, _ = await self._ensure_player_for_request(request)
         prefix = f"http://{request.host}"
-        limit = int(request.query.get("limit", "50"))
         tracks = await self.provider.mass.music.tracks.library_items(
-            limit=limit, order_by="last_played"
+            limit=50, order_by="last_played"
         )
-        items = [self._format_msx_track(track, prefix, player_id, device_param) for track in tracks]
-        return web.json_response(
-            {
-                "type": "list",
-                "headline": "Recently played",
-                "template": {
-                    "type": "separate",
-                    "layout": "0,0,2,4",
-                    "icon": "msx-white-soft:history",
-                    "imageFiller": "default",
-                },
-                "items": items if items else [{"title": "No recently played tracks"}],
-            }
+        items = [
+            map_track_to_msx(t, prefix, player_id, self.provider, device_param) for t in tracks
+        ]
+        content = MsxContent(
+            headline="Recently played",
+            template=MsxTemplate(
+                type="separate",
+                layout="0,0,2,4",
+                icon="msx-white-soft:history",
+                image_filler="default",
+            ),
+            items=items if items else [MsxItem(title="No recently played tracks")],
         )
+        return web.json_response(content.model_dump(by_alias=True, exclude_none=True))
 
     async def _handle_msx_search_page(self, request: web.Request) -> web.Response:
         """Return a content page whose page-level action launches the Input Plugin keyboard."""
         _, device_param, _ = await self._ensure_player_for_request(request)
         prefix = f"http://{request.host}"
-        search_url = self._append_device_param(
+        search_url = append_device_param(
             f"{prefix}/msx/search-input.json?q={{INPUT}}", device_param
         )
         action = (
@@ -432,25 +397,23 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             f"|search:3|en|Search Music||||Search..."
             f"@{prefix}/msx/input.html"
         )
-        return web.json_response(
-            {
-                "type": "list",
-                "headline": "Search",
-                "action": action,
-                "template": {
-                    "type": "separate",
-                    "layout": "0,0,2,4",
-                },
-                "items": [
-                    {
-                        "title": "Search Music",
-                        "titleFooter": "Press OK to open keyboard",
-                        "icon": "search",
-                        "action": action,
-                    }
-                ],
-            }
+        content = MsxContent(
+            headline="Search",
+            action=action,
+            template=MsxTemplate(
+                type="separate",
+                layout="0,0,2,4",
+            ),
+            items=[
+                MsxItem(
+                    title="Search Music",
+                    title_footer="Press OK to open keyboard",
+                    icon="search",
+                    action=action,
+                )
+            ],
         )
+        return web.json_response(content.model_dump(by_alias=True, exclude_none=True))
 
     async def _handle_msx_search_input(self, request: web.Request) -> web.Response:
         """Return search results for the MSX Input Plugin (search keyboard)."""
@@ -458,60 +421,48 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         prefix = f"http://{request.host}"
         query = request.query.get("q", "")
         if not query:
-            return web.json_response(
-                {
-                    "headline": "{ico:search} Search",
-                    "hint": "Type to search...",
-                    "template": {
-                        "type": "separate",
-                        "layout": "0,0,2,4",
-                        "imageFiller": "default",
-                    },
-                    "items": [{"title": "Start typing to search"}],
-                }
+            content = MsxContent(
+                headline="{ico:search} Search",
+                hint="Type to search...",
+                template=MsxTemplate(
+                    type="separate",
+                    layout="0,0,2,4",
+                    image_filler="default",
+                ),
+                items=[MsxItem(title="Start typing to search")],
             )
+            return web.json_response(content.model_dump(by_alias=True, exclude_none=True))
+
         limit = int(request.query.get("limit", "20"))
         results = await self.provider.mass.music.search(query, limit=limit)
         items = []
         for artist in results.artists:
-            url = f"{prefix}/msx/artists/{artist.item_id}/albums.json"
-            items.append(
-                {
-                    "title": artist.name,
-                    "label": "Artist",
-                    "icon": "msx-white-soft:person",
-                    "image": self._get_image_url(artist),
-                    "action": f"content:{self._append_device_param(url, device_param)}",
-                }
-            )
-        for album in results.albums:
-            url = f"{prefix}/msx/albums/{album.item_id}/tracks.json?provider={album.provider}"
-            items.append(
-                {
-                    "title": album.name,
-                    "label": f"Album — {getattr(album, 'artist_str', '')}",
-                    "icon": "msx-white-soft:album",
-                    "image": self._get_image_url(album),
-                    "action": f"content:{self._append_device_param(url, device_param)}",
-                }
-            )
-        for track in results.tracks:
-            item = self._format_msx_track(track, prefix, player_id, device_param)
-            item["label"] = f"Track — {getattr(track, 'artist_str', '')}"
-            item["icon"] = "msx-white-soft:audiotrack"
+            item = map_artist_to_msx(artist, prefix, self.provider, device_param)
+            item.label = "Artist"
+            item.icon = "msx-white-soft:person"
             items.append(item)
-        return web.json_response(
-            {
-                "headline": f'{{ico:search}} "{query}"',
-                "hint": f"Found {len(items)} items",
-                "template": {
-                    "type": "separate",
-                    "layout": "0,0,2,4",
-                    "imageFiller": "default",
-                },
-                "items": items if items else [{"title": "No results found"}],
-            }
+        for album in results.albums:
+            item = await map_album_to_msx(album, prefix, self.provider, device_param)
+            item.label = f"Album — {getattr(album, 'artist_str', '')}"
+            item.icon = "msx-white-soft:album"
+            items.append(item)
+        for track in results.tracks:
+            item = map_track_to_msx(track, prefix, player_id, self.provider, device_param)
+            item.label = f"Track — {getattr(track, 'artist_str', '')}"
+            item.icon = "msx-white-soft:audiotrack"
+            items.append(item)
+
+        content = MsxContent(
+            headline=f'{{ico:search}} "{query}"',
+            hint=f"Found {len(items)} items",
+            template=MsxTemplate(
+                type="separate",
+                layout="0,0,2,4",
+                image_filler="default",
+            ),
+            items=items if items else [MsxItem(title="No results found")],
         )
+        return web.json_response(content.model_dump(by_alias=True, exclude_none=True))
 
     async def _handle_msx_search(self, request: web.Request) -> web.Response:
         """Return search results as an MSX content page."""
@@ -520,54 +471,41 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         query = request.query.get("q", "")
         if not query:
             return web.json_response(
-                {
-                    "type": "list",
-                    "headline": "Search",
-                    "items": [{"title": "Please enter a search query"}],
-                }
+                MsxContent(
+                    headline="Search",
+                    items=[MsxItem(title="Please enter a search query")],
+                ).model_dump(by_alias=True, exclude_none=True)
             )
+
         limit = int(request.query.get("limit", "20"))
         results = await self.provider.mass.music.search(query, limit=limit)
         items = []
         for artist in results.artists:
-            url = f"{prefix}/msx/artists/{artist.item_id}/albums.json"
-            items.append(
-                {
-                    "title": artist.name,
-                    "label": "Artist",
-                    "icon": "msx-white-soft:person",
-                    "image": self._get_image_url(artist),
-                    "action": f"content:{self._append_device_param(url, device_param)}",
-                }
-            )
-        for album in results.albums:
-            url = f"{prefix}/msx/albums/{album.item_id}/tracks.json?provider={album.provider}"
-            items.append(
-                {
-                    "title": album.name,
-                    "label": f"Album — {getattr(album, 'artist_str', '')}",
-                    "icon": "msx-white-soft:album",
-                    "image": self._get_image_url(album),
-                    "action": f"content:{self._append_device_param(url, device_param)}",
-                }
-            )
-        for track in results.tracks:
-            item = self._format_msx_track(track, prefix, player_id, device_param)
-            item["label"] = f"Track — {getattr(track, 'artist_str', '')}"
-            item["icon"] = "msx-white-soft:audiotrack"
+            item = map_artist_to_msx(artist, prefix, self.provider, device_param)
+            item.label = "Artist"
+            item.icon = "msx-white-soft:person"
             items.append(item)
-        return web.json_response(
-            {
-                "type": "list",
-                "headline": f"Search: {query}",
-                "template": {
-                    "type": "separate",
-                    "layout": "0,0,2,4",
-                    "imageFiller": "default",
-                },
-                "items": items if items else [{"title": "No results found"}],
-            }
+        for album in results.albums:
+            item = await map_album_to_msx(album, prefix, self.provider, device_param)
+            item.label = f"Album — {getattr(album, 'artist_str', '')}"
+            item.icon = "msx-white-soft:album"
+            items.append(item)
+        for track in results.tracks:
+            item = map_track_to_msx(track, prefix, player_id, self.provider, device_param)
+            item.label = f"Track — {getattr(track, 'artist_str', '')}"
+            item.icon = "msx-white-soft:audiotrack"
+            items.append(item)
+
+        content = MsxContent(
+            headline=f"Search: {query}",
+            template=MsxTemplate(
+                type="separate",
+                layout="0,0,2,4",
+                image_filler="default",
+            ),
+            items=items if items else [MsxItem(title="No results found")],
         )
+        return web.json_response(content.model_dump(by_alias=True, exclude_none=True))
 
     # --- MSX Detail Pages ---
 
@@ -582,19 +520,19 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         except Exception:
             logger.warning("Failed to fetch tracks for album %s", item_id)
             tracks = []
-        items = [self._format_msx_track(track, prefix, player_id, device_param) for track in tracks]
-        return web.json_response(
-            {
-                "type": "list",
-                "headline": "Album Tracks",
-                "template": {
-                    "type": "separate",
-                    "layout": "0,0,2,4",
-                    "imageFiller": "default",
-                },
-                "items": items if items else [{"title": "No tracks found"}],
-            }
+        items = [
+            map_track_to_msx(t, prefix, player_id, self.provider, device_param) for t in tracks
+        ]
+        content = MsxContent(
+            headline="Album Tracks",
+            template=MsxTemplate(
+                type="separate",
+                layout="0,0,2,4",
+                image_filler="default",
+            ),
+            items=items if items else [MsxItem(title="No tracks found")],
         )
+        return web.json_response(content.model_dump(by_alias=True, exclude_none=True))
 
     async def _handle_msx_artist_albums(self, request: web.Request) -> web.Response:
         """Return albums for an artist as an MSX content page."""
@@ -606,29 +544,20 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         except Exception:
             logger.warning("Failed to fetch albums for artist %s", item_id)
             albums = []
-        items = []
-        for album in albums:
-            url = f"{prefix}/msx/albums/{album.item_id}/tracks.json?provider={album.provider}"
-            items.append(
-                {
-                    "title": album.name,
-                    "label": getattr(album, "artist_str", ""),
-                    "image": self._get_image_url(album),
-                    "action": f"content:{self._append_device_param(url, device_param)}",
-                }
-            )
-        return web.json_response(
-            {
-                "type": "list",
-                "headline": "Artist Albums",
-                "template": {
-                    "type": "separate",
-                    "layout": "0,0,2,4",
-                    "imageFiller": "default",
-                },
-                "items": items if items else [{"title": "No albums found"}],
-            }
+
+        items = await asyncio.gather(
+            *(map_album_to_msx(a, prefix, self.provider, device_param) for a in albums)
         )
+        content = MsxContent(
+            headline="Artist Albums",
+            template=MsxTemplate(
+                type="separate",
+                layout="0,0,2,4",
+                image_filler="default",
+            ),
+            items=items if items else [MsxItem(title="No albums found")],
+        )
+        return web.json_response(content.model_dump(by_alias=True, exclude_none=True))
 
     async def _handle_msx_playlist_tracks(self, request: web.Request) -> web.Response:
         """Return tracks for a playlist as an MSX content page."""
@@ -642,20 +571,20 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         except Exception:
             logger.warning("Failed to fetch tracks for playlist %s", item_id)
             tracks = []
-        items = [self._format_msx_track(track, prefix, player_id, device_param) for track in tracks]
-        return web.json_response(
-            {
-                "type": "list",
-                "headline": "Playlist Tracks",
-                "template": {
-                    "type": "separate",
-                    "layout": "0,0,2,4",
-                    "icon": "msx-white-soft:audiotrack",
-                    "imageFiller": "default",
-                },
-                "items": items if items else [{"title": "No tracks found"}],
-            }
+        items = [
+            map_track_to_msx(t, prefix, player_id, self.provider, device_param) for t in tracks
+        ]
+        content = MsxContent(
+            headline="Playlist Tracks",
+            template=MsxTemplate(
+                type="separate",
+                layout="0,0,2,4",
+                icon="msx-white-soft:audiotrack",
+                image_filler="default",
+            ),
+            items=items if items else [MsxItem(title="No tracks found")],
         )
+        return web.json_response(content.model_dump(by_alias=True, exclude_none=True))
 
     # --- MSX Audio Playback ---
 
@@ -668,11 +597,8 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
 
         self.provider.on_player_activity(player_id)
         player = self.provider.mass.players.get(player_id)
-        if not player:
+        if not player or not isinstance(player, MSXPlayer):
             return web.Response(status=404, text="Player not found")
-
-        if not isinstance(player, MSXPlayer):
-            return web.Response(status=400, text="Not an MSX player")
 
         # Resolve track URI to get duration metadata before playback
         track_duration: int = 0
@@ -698,21 +624,30 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
 
         # Use resolved track duration (always available) over media.duration (may be None)
         duration = track_duration or media.duration or 0
+        playback_mode = self.provider.playback_mode
+        use_flow_mode = playback_mode != "hybrid_playlist_queue"
 
-        # Get raw PCM audio via MA's internal streaming API (like sendspin)
+        return await self._serve_audio_stream(
+            request, player, media, duration=duration, use_flow_mode=use_flow_mode
+        )
+
+    async def _serve_audio_stream(
+        self,
+        request: web.Request,
+        player: MSXPlayer,
+        media: Any,
+        duration: int = 0,
+        use_flow_mode: bool = True,
+    ) -> web.StreamResponse:
+        """Unified method to stream audio from MA to MSX via ffmpeg."""
+        player_id = player.player_id
+        # Get raw PCM audio via MA's internal streaming API
         pcm_format = AudioFormat(
             content_type=ContentType.PCM_S16LE,
             sample_rate=44100,
             bit_depth=16,
             channels=2,
         )
-        # Choose between flow-mode (single long stream) and per-track streams based
-        # on the configured playback mode. In legacy/radio modes we keep using a
-        # flow stream so the HTTP connection stays open across the entire queue.
-        # In the hybrid playlist+queue mode we explicitly request a single-track
-        # stream so MSX can advance its own playlist item-by-item.
-        playback_mode = self.provider.playback_mode
-        use_flow_mode = playback_mode != "hybrid_playlist_queue"
         audio_source = self.provider.mass.streams.get_stream(
             media,
             pcm_format,
@@ -734,30 +669,29 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             channels=2,
         )
 
-        # For flow_mode (queue with multiple tracks), do NOT set Content-Length —
-        # the stream is continuous across tracks. If we set it to the first track's
-        # size, the MSX player closes after that many bytes and the next track never starts.
-        # For single-track streams, Content-Length helps the player show progress.
-        bitrate_map = {
-            "mp3": 40_000,
-            "aac": 32_000,
-        }
+        # Content-Length needed for MSX to play full track (otherwise ~90s cutoff)
+        bitrate_map = {"mp3": 40_000, "aac": 32_000}
         bytes_per_sec = bitrate_map.get(output_format_str, 0)
-        # Treat queue-backed streams as flow mode by default, unless the hybrid
-        # playlist+queue mode explicitly requested a per-track stream above.
+
+        # For flow_mode (queue with multiple tracks), do NOT set Content-Length —
+        # the stream is continuous across tracks.
         is_flow_stream = bool(media.source_id and media.queue_item_id) and use_flow_mode
 
-        headers: dict[str, str] = {"Content-Type": mime_type}
+        headers: dict[str, str] = {
+            "Content-Type": mime_type,
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Accept-Ranges": "none",
+        }
         if not is_flow_stream and duration and bytes_per_sec:
             headers["Content-Length"] = str(int(duration * bytes_per_sec))
-        headers["Accept-Ranges"] = "none"
 
         logger.debug(
-            "MSX audio %s: format=%s, flow=%s, track_duration=%s, Content-Length=%s",
+            "Serving audio %s: format=%s, flow=%s, duration=%s, Content-Length=%s",
             player_id,
             output_format_str,
             is_flow_stream,
-            track_duration,
+            duration,
             headers.get("Content-Length", "NOT SET"),
         )
 
@@ -765,39 +699,39 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         await response.prepare(request)
 
         transport = getattr(request, "transport", None)
-        player = self.provider.mass.players.get(player_id)
-        if not player or not getattr(player, "current_media", None):
+        # Re-check: stop may have been called while we were preparing
+        if not player.current_media:
             if transport and hasattr(transport, "abort"):
                 transport.abort()
             return response
 
-        chunk_queue_audio: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=8)
+        chunk_queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=8)
 
-        async def producer_audio() -> None:
+        async def producer() -> None:
             try:
                 async for chunk in get_ffmpeg_stream(
                     audio_input=audio_source,
                     input_format=pcm_format,
                     output_format=out_format,
                 ):
-                    await chunk_queue_audio.put(chunk)
+                    await chunk_queue.put(chunk)
             finally:
                 with contextlib.suppress(asyncio.QueueFull):
-                    chunk_queue_audio.put_nowait(None)
+                    chunk_queue.put_nowait(None)
 
         async def stream_loop() -> None:
-            producer_task = None
+            producer_task: asyncio.Task[None] | None = None
             try:
-                producer_task = asyncio.create_task(producer_audio())
+                producer_task = asyncio.create_task(producer())
                 while True:
-                    chunk = await chunk_queue_audio.get()
+                    chunk = await chunk_queue.get()
                     if chunk is None:
                         break
                     await response.write(chunk)
             except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
-                logger.debug("Client disconnected from audio stream %s", player_id)
+                logger.debug("Client disconnected from stream %s", player_id)
             except asyncio.CancelledError:
-                logger.debug("Audio stream cancelled for player %s", player_id)
+                logger.debug("Stream cancelled for player %s", player_id)
                 raise
             finally:
                 if producer_task and not producer_task.done():
@@ -812,7 +746,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         except asyncio.CancelledError:
             raise
         except Exception:
-            logger.exception("Audio stream error for player %s", player_id)
+            logger.exception("Stream error for player %s", player_id)
         finally:
             self._unregister_stream(player_id, stream_task, transport)
 
@@ -1018,11 +952,8 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         player_id = request.match_info["player_id"]
         self.provider.on_player_activity(player_id)
         player = self.provider.mass.players.get(player_id)
-        if not player:
+        if not player or not isinstance(player, MSXPlayer):
             return web.Response(status=404, text="Player not found")
-
-        if not isinstance(player, MSXPlayer):
-            return web.Response(status=400, text="Not an MSX player")
 
         media = player.current_media
         if not media:
@@ -1040,100 +971,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                 if not duration and queue_item.duration:
                     duration = queue_item.duration
 
-        # Get raw PCM audio via MA's internal streaming API
-        pcm_format = AudioFormat(
-            content_type=ContentType.PCM_S16LE,
-            sample_rate=44100,
-            bit_depth=16,
-            channels=2,
-        )
-        audio_source = self.provider.mass.streams.get_stream(media, pcm_format)
-
-        # Encode PCM → output format via ffmpeg
-        output_format_str = player.output_format
-        content_type_map = {
-            "mp3": (ContentType.MP3, "audio/mpeg"),
-            "aac": (ContentType.AAC, "audio/aac"),
-            "flac": (ContentType.FLAC, "audio/flac"),
-        }
-        codec, mime_type = content_type_map.get(output_format_str, (ContentType.MP3, "audio/mpeg"))
-        out_format = AudioFormat(
-            content_type=codec,
-            sample_rate=44100,
-            bit_depth=16,
-            channels=2,
-        )
-
-        # Content-Length needed for MSX to play full track (otherwise ~90s cutoff)
-        bitrate_map = {"mp3": 40_000, "aac": 32_000}
-        bytes_per_sec = bitrate_map.get(output_format_str, 0)
-        headers: dict[str, str] = {
-            "Content-Type": mime_type,
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        }
-        if duration and bytes_per_sec:
-            headers["Content-Length"] = str(int(duration * bytes_per_sec))
-        headers["Accept-Ranges"] = "none"
-
-        response = web.StreamResponse(status=200, headers=headers)
-        await response.prepare(request)
-
-        transport = getattr(request, "transport", None)
-
-        # Re-check: stop may have been called while we were preparing
-        player = self.provider.mass.players.get(player_id)
-        if not player or not getattr(player, "current_media", None):
-            if transport and hasattr(transport, "abort"):
-                transport.abort()
-            return response
-
-        chunk_queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=8)
-
-        async def producer() -> None:
-            try:
-                async for chunk in get_ffmpeg_stream(
-                    audio_input=audio_source,
-                    input_format=pcm_format,
-                    output_format=out_format,
-                ):
-                    await chunk_queue.put(chunk)
-            finally:
-                with contextlib.suppress(asyncio.QueueFull):
-                    chunk_queue.put_nowait(None)
-
-        async def stream_loop() -> None:
-            producer_task: asyncio.Task[None] | None = None
-            try:
-                producer_task = asyncio.create_task(producer())
-                while True:
-                    chunk = await chunk_queue.get()
-                    if chunk is None:
-                        break
-                    await response.write(chunk)
-            except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
-                logger.debug("Client disconnected from stream %s", player_id)
-            except asyncio.CancelledError:
-                logger.debug("Stream cancelled for player %s", player_id)
-                raise
-            finally:
-                if producer_task and not producer_task.done():
-                    producer_task.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await producer_task
-
-        stream_task: asyncio.Task[None] = asyncio.create_task(stream_loop())
-        self._register_stream(player_id, stream_task, transport)
-        try:
-            await stream_task
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception("Stream error for player %s", player_id)
-        finally:
-            self._unregister_stream(player_id, stream_task, transport)
-
-        return response
+        return await self._serve_audio_stream(request, player, media, duration=duration)
 
     # --- Library API Routes ---
 
@@ -1149,7 +987,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                         "item_id": str(album.item_id),
                         "name": album.name,
                         "artist": getattr(album, "artist_str", ""),
-                        "image": self._get_image_url(album),
+                        "image": get_image_url(album, self.provider),
                         "uri": album.uri,
                     }
                     for album in albums
@@ -1179,7 +1017,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                     {
                         "item_id": str(artist.item_id),
                         "name": artist.name,
-                        "image": self._get_image_url(artist),
+                        "image": get_image_url(artist, self.provider),
                         "uri": artist.uri,
                     }
                     for artist in artists
@@ -1199,7 +1037,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                         "item_id": str(album.item_id),
                         "name": album.name,
                         "artist": getattr(album, "artist_str", ""),
-                        "image": self._get_image_url(album),
+                        "image": get_image_url(album, self.provider),
                         "uri": album.uri,
                     }
                     for album in albums
@@ -1220,7 +1058,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                     {
                         "item_id": str(playlist.item_id),
                         "name": playlist.name,
-                        "image": self._get_image_url(playlist),
+                        "image": get_image_url(playlist, self.provider),
                         "uri": playlist.uri,
                     }
                     for playlist in playlists
@@ -1264,7 +1102,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                     {
                         "item_id": str(a.item_id),
                         "name": a.name,
-                        "image": self._get_image_url(a),
+                        "image": get_image_url(a, self.provider),
                         "uri": a.uri,
                     }
                     for a in results.artists
@@ -1274,7 +1112,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                         "item_id": str(a.item_id),
                         "name": a.name,
                         "artist": getattr(a, "artist_str", ""),
-                        "image": self._get_image_url(a),
+                        "image": get_image_url(a, self.provider),
                         "uri": a.uri,
                     }
                     for a in results.albums
@@ -1284,7 +1122,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                     {
                         "item_id": str(p.item_id),
                         "name": p.name,
-                        "image": self._get_image_url(p),
+                        "image": get_image_url(p, self.provider),
                         "uri": p.uri,
                     }
                     for p in results.playlists
@@ -1382,10 +1220,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
 
     def _append_device_param(self, url: str, device_param: str) -> str:
         """Append device_id to URL if present."""
-        if not device_param:
-            return url
-        sep = "&" if "?" in url else "?"
-        return f"{url}{sep}{device_param}"
+        return append_device_param(url, device_param)
 
     async def _ensure_player_for_request(
         self, request: web.Request
@@ -1408,45 +1243,8 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             "artist": getattr(track, "artist_str", ""),
             "album": getattr(getattr(track, "album", None), "name", ""),
             "duration": getattr(track, "duration", 0),
-            "image": self._get_image_url(track),
+            "image": self.provider.mass.metadata.get_image_url(track.image)
+            if hasattr(track, "image") and track.image
+            else None,
             "uri": track.uri,
         }
-
-    def _format_msx_track(
-        self, track: Any, prefix: str, player_id: str, device_param: str = ""
-    ) -> dict[str, Any]:
-        """Format a track as an MSX content item with playback action."""
-        duration = getattr(track, "duration", 0) or 0
-        duration_str = f"{duration // 60}:{duration % 60:02d}" if duration else ""
-        label = getattr(track, "artist_str", "")
-        if duration_str:
-            label = f"{label} · {duration_str}" if label else duration_str
-        image_url = self._get_image_url(track)
-        audio_url = f"{prefix}/msx/audio/{player_id}?uri={quote(track.uri, safe='')}"
-        if device_param:
-            audio_url = f"{audio_url}&{device_param}"
-        return {
-            "title": track.name,
-            "label": label,
-            "playerLabel": track.name,
-            "image": image_url,
-            "background": image_url,
-            "action": f"audio:{audio_url}",
-        }
-
-    def _get_image_url(self, item: Any) -> str | None:
-        """Get an image URL for a media item."""
-        if hasattr(item, "image") and item.image:
-            return self.provider.mass.metadata.get_image_url(item.image)
-        return None
-
-    async def _get_album_image_fallback(self, album: Any) -> str | None:
-        """Get album image from its first track (albums often lack metadata images)."""
-        try:
-            tracks = await self.provider.mass.music.albums.tracks(album.item_id, "library")
-            for track in tracks:
-                if hasattr(track, "image") and track.image:
-                    return self.provider.mass.metadata.get_image_url(track.image)
-        except Exception as exc:
-            logger.debug("Album image fallback failed: %s", exc)
-        return None

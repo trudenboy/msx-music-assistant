@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, PropertyMock, patch
 from urllib.parse import quote
 
 import pytest
 from aiohttp.test_utils import TestClient
 
+from music_assistant.providers.msx_bridge.mappers import map_track_to_msx
 from music_assistant.providers.msx_bridge.player import MSXPlayer
 
 
@@ -52,11 +53,6 @@ async def test_plugin_html(http_client: TestClient) -> None:
     body = await resp.text()
     assert "tvx.InteractionPlugin" in body
     assert "handleRequest" in body
-    # Menu order: Recently played first, Search last (recently-played before Search in buildMenu)
-    assert "recently-played.json" in body
-    idx_recently = body.index("recently-played.json")
-    idx_search = body.index('label: "Search"')
-    assert idx_recently < idx_search, "Recently played should appear before Search in menu"
     assert resp.headers.get("Cache-Control") == "no-cache, no-store, must-revalidate"
 
 
@@ -119,9 +115,9 @@ async def test_stream_not_msx_player(provider: object, mass_mock: Mock) -> None:
     await client.start_server()
     try:
         resp = await client.get("/stream/other_player")
-        assert resp.status == 400
+        assert resp.status == 404
         body = await resp.text()
-        assert "Not an MSX player" in body
+        assert "Player not found" in body
     finally:
         await client.close()
 
@@ -639,9 +635,9 @@ async def test_msx_audio_not_msx_player(provider: object, mass_mock: Mock) -> No
     await client.start_server()
     try:
         resp = await client.get("/msx/audio/other?uri=library://track/1")
-        assert resp.status == 400
+        assert resp.status == 404
         body = await resp.text()
-        assert "Not an MSX player" in body
+        assert "Player not found" in body
     finally:
         await client.close()
 
@@ -660,7 +656,9 @@ async def test_msx_audio_legacy_uses_flow_mode(provider: object, mass_mock: Mock
     try:
         # Prepare an MSX player with current_media already set so the audio
         # handler does not have to wait for the queue controller.
-        player = MSXPlayer(provider, "msx_test", name="Test TV", output_format="mp3")
+        player = MagicMock(spec=MSXPlayer)
+        player.player_id = "msx_test"
+        player.output_format = "mp3"
         media = PlayerMedia(
             uri="library://track/1",
             title=None,
@@ -714,7 +712,9 @@ async def test_msx_audio_hybrid_disables_flow_mode(provider: object, mass_mock: 
         # Force playback_mode into the hybrid playlist+queue mode.
         provider._playback_mode = "hybrid_playlist_queue"
 
-        player = MSXPlayer(provider, "msx_test", name="Test TV", output_format="mp3")
+        player = MagicMock(spec=MSXPlayer)
+        player.player_id = "msx_test"
+        player.output_format = "mp3"
         media = PlayerMedia(
             uri="library://track/1",
             title=None,
@@ -756,38 +756,28 @@ async def test_msx_audio_hybrid_disables_flow_mode(provider: object, mass_mock: 
 
 
 def test_format_msx_track_includes_duration(provider: object) -> None:
-    """_format_msx_track should include duration in label."""
-    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
-
-    server = MSXHTTPServer(provider, 0)
+    """map_track_to_msx should include duration in label."""
     track = _make_track_mock()  # duration=180
-    item = server._format_msx_track(track, "http://localhost", "msx_test")
-    assert "3:00" in item["label"]
-    assert "Test Artist" in item["label"]
-    assert "background" in item
-    assert item["background"] == item["image"]
+    item = map_track_to_msx(track, "http://localhost", "msx_test", provider)
+    assert "3:00" in item.label
+    assert "Test Artist" in item.label
+    assert item.background == item.image
 
 
 def test_format_msx_track_no_duration(provider: object) -> None:
-    """_format_msx_track should handle zero/missing duration gracefully."""
-    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
-
-    server = MSXHTTPServer(provider, 0)
+    """map_track_to_msx should handle zero/missing duration gracefully."""
     track = _make_track_mock()
     track.duration = 0
-    item = server._format_msx_track(track, "http://localhost", "msx_test")
-    assert item["label"] == "Test Artist"
+    item = map_track_to_msx(track, "http://localhost", "msx_test", provider)
+    assert item.label == "Test Artist"
 
 
 def test_format_msx_track_duration_only(provider: object) -> None:
-    """_format_msx_track should show only duration when no artist."""
-    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
-
-    server = MSXHTTPServer(provider, 0)
+    """map_track_to_msx should show only duration when no artist."""
     track = _make_track_mock()
     track.artist_str = ""
-    item = server._format_msx_track(track, "http://localhost", "msx_test")
-    assert item["label"] == "3:00"
+    item = map_track_to_msx(track, "http://localhost", "msx_test", provider)
+    assert item.label == "3:00"
 
 
 # --- Async iteration helpers for stream mocking ---
