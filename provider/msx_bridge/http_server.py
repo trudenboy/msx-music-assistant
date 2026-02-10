@@ -212,7 +212,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
     async def _handle_msx_plugin_html(self, request: web.Request) -> web.Response:
         """Serve plugin.html with no-cache so MSX always gets latest menu order."""
         path = STATIC_DIR / "plugin.html"
-        response = cast("web.Response", web.FileResponse(path))
+        response = cast(web.Response, web.FileResponse(path))
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -706,7 +706,14 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             bit_depth=16,
             channels=2,
         )
-        audio_source = self.provider.mass.streams.get_stream(media, pcm_format)
+        # Always use flow-mode stream for MSX audio so the HTTP
+        # connection stays open across the entire queue instead of
+        # stopping after the first track.
+        audio_source = self.provider.mass.streams.get_stream(
+            media,
+            pcm_format,
+            force_flow_mode=True,
+        )
 
         # Encode PCM → output format via ffmpeg
         output_format_str = player.output_format
@@ -732,7 +739,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             "aac": 32_000,
         }
         bytes_per_sec = bitrate_map.get(output_format_str, 0)
-        is_flow_stream = media.media_type == MediaType.FLOW_STREAM
+        # For MSX we always request a queue-backed (flow) stream above,
+        # so treat any queue item as flow mode here.
+        is_flow_stream = bool(media.source_id and media.queue_item_id)
 
         headers: dict[str, str] = {"Content-Type": mime_type}
         if not is_flow_stream and duration and bytes_per_sec:
@@ -871,6 +880,45 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             len(clients),
         )
         payload: dict[str, Any] = {"type": "play", "path": f"/stream/{player_id}"}
+        if title:
+            payload["title"] = title
+        if artist:
+            payload["artist"] = artist
+        if image_url:
+            payload["image_url"] = image_url
+        if duration is not None:
+            payload["duration"] = duration
+        msg = json.dumps(payload)
+        for ws in list(clients):
+            if not ws.closed:
+                self.provider.mass.create_task(self._ws_send(ws, msg))
+
+    def broadcast_play_update(
+        self,
+        player_id: str,
+        *,
+        title: str | None = None,
+        artist: str | None = None,
+        image_url: str | None = None,
+        duration: int | None = None,
+    ) -> None:
+        """Notify subscribed WebSocket clients that track metadata changed."""
+        clients = self._ws_clients.get(player_id, set())
+        if not clients:
+            logger.warning(
+                "broadcast_play_update: no WebSocket clients for player_id=%s (connected: %s)",
+                player_id,
+                list(self._ws_clients.keys()),
+            )
+            return
+        logger.info(
+            "broadcast_play_update: player_id=%s, sending to %d client(s)",
+            player_id,
+            len(clients),
+        )
+        # Keep the same payload shape as broadcast_play but with a different type,
+        # so the MSX plugin can reuse most of the handling logic.
+        payload: dict[str, Any] = {"type": "play_update", "path": f"/stream/{player_id}"}
         if title:
             payload["title"] = title
         if artist:

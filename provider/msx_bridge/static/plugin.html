@@ -17,22 +17,13 @@
         return url + sep + "device_id=" + encodeURIComponent(deviceId);
     }
 
-    function buildSearchRequestAction(deviceId) {
-        var searchUrl = BRIDGE + "/msx/search-input.json?q={INPUT}";
-        if (deviceId) searchUrl += "&device_id=" + encodeURIComponent(deviceId);
-        var inputPluginUrl = BRIDGE + "/msx/input.html";
-        if (deviceId) inputPluginUrl += "?device_id=" + encodeURIComponent(deviceId);
-        return "request:interaction:" + searchUrl + "|search:3|en|Search Music||||Search..." + "@" + inputPluginUrl;
-    }
-
     function buildMenu(deviceId) {
         return [
-            { icon: "history", label: "Recently played", data: addDeviceParam(BRIDGE + "/msx/recently-played.json", deviceId) },
+            { icon: "search", label: "Search", data: addDeviceParam(BRIDGE + "/msx/search-page.json", deviceId) },
             { icon: "album", label: "Albums", data: addDeviceParam(BRIDGE + "/msx/albums.json", deviceId) },
             { icon: "person", label: "Artists", data: addDeviceParam(BRIDGE + "/msx/artists.json", deviceId) },
             { icon: "queue-music", label: "Playlists", data: addDeviceParam(BRIDGE + "/msx/playlists.json", deviceId) },
-            { icon: "audiotrack", label: "Tracks", data: addDeviceParam(BRIDGE + "/msx/tracks.json", deviceId) },
-            { icon: "search", label: "Search", data: buildSearchRequestAction(deviceId) }
+            { icon: "audiotrack", label: "Tracks", data: addDeviceParam(BRIDGE + "/msx/tracks.json", deviceId) }
         ];
     }
 
@@ -51,12 +42,7 @@
             try {
                 var msg = JSON.parse(ev.data);
                 if (msg.type === "stop" && typeof tvx.InteractionPlugin.executeAction === "function") {
-                    var action;
-                    if (msg.showNotification) {
-                        action = "eject";
-                    } else {
-                        action = "[player:eject|player:hide]";
-                    }
+                    var action = msg.showNotification ? "eject" : "player:eject";
                     tvx.InteractionPlugin.executeAction(action);
                 } else if (msg.type === "play" && msg.path && typeof tvx.InteractionPlugin.executeAction === "function") {
                     var audioUrl = BRIDGE + msg.path;
@@ -71,12 +57,21 @@
                     if (msg.image_url) data.background = msg.image_url;
                     if (msg.duration != null && msg.duration > 0) data.duration = msg.duration;
                     tvx.InteractionPlugin.executeAction("audio:" + audioUrl, data);
+                } else if (msg.type === "play_update" && typeof tvx.InteractionPlugin.executeAction === "function") {
+                    // Update metadata of the currently playing item without restarting audio.
+                    var playerLabelUpdate = msg.title || "Music Assistant";
+                    var labelPartsUpdate = [];
+                    if (msg.artist) labelPartsUpdate.push(msg.artist);
+                    var durUpdate = formatDuration(msg.duration);
+                    if (durUpdate) labelPartsUpdate.push(durUpdate);
+                    var labelUpdate = labelPartsUpdate.join(" · ") || "";
+                    var updateData = { playerLabel: playerLabelUpdate };
+                    if (labelUpdate) updateData.label = labelUpdate;
+                    if (msg.image_url) updateData.background = msg.image_url;
+                    if (msg.duration != null && msg.duration > 0) updateData.duration = msg.duration;
+                    tvx.InteractionPlugin.executeAction("player:update", updateData);
                 }
-            } catch (e) {
-                if (typeof console !== "undefined" && console.warn) {
-                    console.warn("MSX push message error", e);
-                }
-            }
+            } catch (e) {}
         };
         ws.onclose = function() {
             setTimeout(function() { connectPushWebSocket(deviceId); }, 5000);

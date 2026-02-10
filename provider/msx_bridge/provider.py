@@ -155,6 +155,25 @@ class MSXBridgeProvider(PlayerProvider):
                 duration=duration,
             )
 
+    def notify_track_updated(
+        self,
+        player_id: str,
+        *,
+        title: str | None = None,
+        artist: str | None = None,
+        image_url: str | None = None,
+        duration: int | None = None,
+    ) -> None:
+        """Notify WebSocket clients that the current track metadata changed."""
+        if self.http_server:
+            self.http_server.broadcast_play_update(
+                player_id,
+                title=title,
+                artist=artist,
+                image_url=image_url,
+                duration=duration,
+            )
+
     def notify_play_stopped(self, player_id: str) -> None:
         """Notify WebSocket clients that playback stopped (MA stop -> MSX).
 
