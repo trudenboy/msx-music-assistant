@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, Mock, PropertyMock, patch
-from urllib.parse import quote
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from aiohttp.test_utils import TestClient
@@ -490,7 +489,7 @@ async def test_msx_playlists_have_action(provider: object, mass_mock: Mock) -> N
 
 
 async def test_msx_tracks_have_action(provider: object, mass_mock: Mock) -> None:
-    """GET /msx/tracks.json items should have audio: action for playback."""
+    """GET /msx/tracks.json items should have playlist: action for playback."""
     from aiohttp.test_utils import TestClient, TestServer
 
     from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
@@ -509,9 +508,8 @@ async def test_msx_tracks_have_action(provider: object, mass_mock: Mock) -> None
         data = await resp.json()
         item = data["items"][0]
         assert "action" in item
-        assert item["action"].startswith("audio:")
-        assert "/msx/audio/msx_" in item["action"]
-        assert quote("library://track/1", safe="") in item["action"]
+        assert item["action"].startswith("playlist:auto:")
+        assert "/msx/playlist/tracks.json" in item["action"]
         assert "playerLabel" in item
         assert item["playerLabel"] == "Test Track"
     finally:
@@ -541,8 +539,8 @@ async def test_msx_album_tracks(provider: object, mass_mock: Mock) -> None:
         assert len(data["items"]) == 1
         item = data["items"][0]
         assert item["title"] == "Test Track"
-        assert item["action"].startswith("audio:")
-        assert "/msx/audio/msx_" in item["action"]
+        assert item["action"].startswith("playlist:auto:")
+        assert "/msx/playlist/album/" in item["action"]
     finally:
         await client.close()
 
@@ -599,7 +597,8 @@ async def test_msx_playlist_tracks(provider: object, mass_mock: Mock) -> None:
         assert len(data["items"]) == 1
         item = data["items"][0]
         assert item["title"] == "Test Track"
-        assert item["action"].startswith("audio:")
+        assert item["action"].startswith("playlist:auto:")
+        assert "/msx/playlist/playlist/" in item["action"]
     finally:
         await client.close()
 
@@ -642,8 +641,8 @@ async def test_msx_audio_not_msx_player(provider: object, mass_mock: Mock) -> No
         await client.close()
 
 
-async def test_msx_audio_legacy_uses_flow_mode(provider: object, mass_mock: Mock) -> None:
-    """GET /msx/audio should request a flow-mode stream in legacy playback mode."""
+async def test_msx_audio_per_track_mode(provider: object, mass_mock: Mock) -> None:
+    """GET /msx/audio should always use force_flow_mode=False (per-track)."""
     from aiohttp.test_utils import TestClient, TestServer
 
     from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
@@ -654,8 +653,6 @@ async def test_msx_audio_legacy_uses_flow_mode(provider: object, mass_mock: Mock
     client = TestClient(TestServer(server.app))
     await client.start_server()
     try:
-        # Prepare an MSX player with current_media already set so the audio
-        # handler does not have to wait for the queue controller.
         player = MagicMock(spec=MSXPlayer)
         player.player_id = "msx_test"
         player.output_format = "mp3"
@@ -670,13 +667,10 @@ async def test_msx_audio_legacy_uses_flow_mode(provider: object, mass_mock: Mock
         player.current_media = media
         mass_mock.players.get.return_value = player
 
-        # Track metadata resolution returns a duration to allow Content-Length calculation.
         track = Mock()
         track.duration = 180
         mass_mock.music.get_item_by_uri.return_value = track
 
-        # Streams controller returns a simple async generator and we patch ffmpeg
-        # to avoid running a real transcoder.
         mass_mock.streams = Mock()
         mass_mock.streams.get_stream = Mock(return_value=_async_iter([b"pcm"]))
 
@@ -688,17 +682,16 @@ async def test_msx_audio_legacy_uses_flow_mode(provider: object, mass_mock: Mock
             resp = await client.get("/msx/audio/msx_test?uri=library://track/1")
             assert resp.status == 200
 
-        # In legacy mode we always request flow_mode=True.
         mass_mock.streams.get_stream.assert_called_once()
         _args, _pos, kwargs = mass_mock.streams.get_stream.mock_calls[0]
-        assert kwargs.get("force_flow_mode") is True
+        assert kwargs.get("force_flow_mode") is False
 
     finally:
         await client.close()
 
 
-async def test_msx_audio_hybrid_disables_flow_mode(provider: object, mass_mock: Mock) -> None:
-    """GET /msx/audio should disable flow-mode stream in hybrid playlist+queue mode."""
+async def test_msx_audio_from_playlist_skips_ws(provider: object, mass_mock: Mock) -> None:
+    """GET /msx/audio with from_playlist=1 should set _skip_ws_notify on the player."""
     from aiohttp.test_utils import TestClient, TestServer
 
     from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
@@ -709,12 +702,10 @@ async def test_msx_audio_hybrid_disables_flow_mode(provider: object, mass_mock: 
     client = TestClient(TestServer(server.app))
     await client.start_server()
     try:
-        # Force playback_mode into the hybrid playlist+queue mode.
-        provider._playback_mode = "hybrid_playlist_queue"
-
         player = MagicMock(spec=MSXPlayer)
         player.player_id = "msx_test"
         player.output_format = "mp3"
+        player._skip_ws_notify = False
         media = PlayerMedia(
             uri="library://track/1",
             title=None,
@@ -727,29 +718,121 @@ async def test_msx_audio_hybrid_disables_flow_mode(provider: object, mass_mock: 
         mass_mock.players.get.return_value = player
 
         track = Mock()
-        track.duration = 120
+        track.duration = 180
         mass_mock.music.get_item_by_uri.return_value = track
 
         mass_mock.streams = Mock()
         mass_mock.streams.get_stream = Mock(return_value=_async_iter([b"pcm"]))
 
-        chunks = [b"encoded-chunk-1", b"encoded-chunk-2"]
+        # Track that _skip_ws_notify was set to True during play_media
+        notify_states = []
+
+        async def _capture_play_media(*a, **k):
+            notify_states.append(player._skip_ws_notify)
+
+        mass_mock.player_queues.play_media = _capture_play_media
+
+        chunks = [b"encoded-chunk-1"]
         with patch(
             "music_assistant.providers.msx_bridge.http_server.get_ffmpeg_stream",
             return_value=_async_iter(chunks),
         ):
-            resp = await client.get("/msx/audio/msx_test?uri=library://track/1")
+            resp = await client.get(
+                "/msx/audio/msx_test?uri=library://track/1&from_playlist=1"
+            )
             assert resp.status == 200
-            # For per-track playback we expect a Content-Length header.
-            assert "Content-Length" in resp.headers
 
-        # In hybrid mode the handler should explicitly disable flow_mode.
-        mass_mock.streams.get_stream.assert_called_once()
-        _args, _pos, kwargs = mass_mock.streams.get_stream.mock_calls[0]
-        assert kwargs.get("force_flow_mode") is False
+        # _skip_ws_notify should have been True during play_media call
+        assert notify_states == [True]
+        # And reset to False after
+        assert player._skip_ws_notify is False
 
     finally:
         await client.close()
+
+
+# --- MSX playlist endpoints ---
+
+
+async def test_msx_album_playlist_endpoint(provider: object, mass_mock: Mock) -> None:
+    """GET /msx/playlist/album/{id}.json should return playlist JSON."""
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
+
+    track = _make_track_mock()
+    mass_mock.music.albums.tracks.return_value = [track]
+
+    server = MSXHTTPServer(provider, 0)
+    client = TestClient(TestServer(server.app))
+    await client.start_server()
+    try:
+        resp = await client.get("/msx/playlist/album/42.json?start=0")
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["type"] == "list"
+        assert data["action"] == "player:play"
+        assert len(data["items"]) == 1
+        item = data["items"][0]
+        assert item["action"].startswith("audio:")
+        assert "/msx/audio/" in item["action"]
+        assert "from_playlist=1" in item["action"]
+    finally:
+        await client.close()
+
+
+async def test_msx_playlist_playlist_endpoint(provider: object, mass_mock: Mock) -> None:
+    """GET /msx/playlist/playlist/{id}.json should return playlist JSON."""
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
+
+    track = _make_track_mock()
+
+    async def _mock_playlist_tracks(*args, **kwargs):
+        yield track
+
+    mass_mock.music.playlists.tracks = Mock(
+        side_effect=lambda *a, **k: _mock_playlist_tracks()
+    )
+
+    server = MSXHTTPServer(provider, 0)
+    client = TestClient(TestServer(server.app))
+    await client.start_server()
+    try:
+        resp = await client.get("/msx/playlist/playlist/5.json?start=1")
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["type"] == "list"
+        assert data["action"] == "player:goto:index:1"
+        assert len(data["items"]) == 1
+    finally:
+        await client.close()
+
+
+async def test_msx_tracks_playlist_endpoint(provider: object, mass_mock: Mock) -> None:
+    """GET /msx/playlist/tracks.json should return playlist JSON."""
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
+
+    track = _make_track_mock()
+    mock_result = Mock()
+    mock_result.__iter__ = Mock(return_value=iter([track]))
+    mass_mock.music.tracks.library_items.return_value = mock_result
+
+    server = MSXHTTPServer(provider, 0)
+    client = TestClient(TestServer(server.app))
+    await client.start_server()
+    try:
+        resp = await client.get("/msx/playlist/tracks.json?start=0")
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["type"] == "list"
+        assert len(data["items"]) == 1
+    finally:
+        await client.close()
+        
 
 
 # --- Duration in track formatting ---

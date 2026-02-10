@@ -17,13 +17,11 @@ from .constants import (
     CONF_ABORT_STREAM_FIRST,
     CONF_HTTP_PORT,
     CONF_OUTPUT_FORMAT,
-    CONF_PLAYBACK_MODE,
     CONF_PLAYER_IDLE_TIMEOUT,
     CONF_SHOW_STOP_NOTIFICATION,
     DEFAULT_ABORT_STREAM_FIRST,
     DEFAULT_HTTP_PORT,
     DEFAULT_OUTPUT_FORMAT,
-    DEFAULT_PLAYBACK_MODE,
     DEFAULT_PLAYER_IDLE_TIMEOUT,
     DEFAULT_SHOW_STOP_NOTIFICATION,
 )
@@ -95,19 +93,6 @@ async def get_config_entries(
             description=(
                 "When stopping: abort stream first, then send WebSocket stop. "
                 "May stop playback faster on some TVs."
-            ),
-        ),
-        ConfigEntry(
-            key=CONF_PLAYBACK_MODE,
-            type=ConfigEntryType.STRING,
-            label="Playback mode (MSX vs MA queue)",
-            required=False,
-            default_value=DEFAULT_PLAYBACK_MODE,
-            description=(
-                "How MSX and Music Assistant coordinate playback: "
-                '"legacy" keeps the current behavior, while future modes like '
-                '"radio", "native_playlist", or "hybrid_playlist_queue" enable '
-                "alternative queue/playlist integration strategies."
             ),
         ),
     )

@@ -19,7 +19,7 @@ class MSXPlayer(Player):
 
     current_stream_url: str | None = None
     output_format: str = "mp3"
-    _last_queue_item_id: str | None = None
+    _skip_ws_notify: bool = False
 
     def __init__(
         self,
@@ -89,13 +89,22 @@ class MSXPlayer(Player):
                 if title is None and queue_item.name:
                     title = queue_item.name
 
-        cast("MSXBridgeProvider", self.provider).notify_play_started(
-            self.player_id,
-            title=title,
-            artist=artist,
-            image_url=image_url,
-            duration=duration,
-        )
+        provider = cast("MSXBridgeProvider", self.provider)
+
+        if not self._skip_ws_notify:
+            # Build Next/Prev actions for the player
+            next_action = f"request:interaction:/api/next/{self.player_id}"
+            prev_action = f"request:interaction:/api/previous/{self.player_id}"
+
+            provider.notify_play_started(
+                self.player_id,
+                title=title,
+                artist=artist,
+                image_url=image_url,
+                duration=duration,
+                next_action=next_action,
+                prev_action=prev_action,
+            )
 
         await self._propagate_to_group_members("play_media", media=media)
 
@@ -215,7 +224,6 @@ class MSXPlayer(Player):
 
     async def poll(self) -> None:
         """Poll player for state updates."""
-        # Update elapsed time during playback
         if (
             self._attr_playback_state == PlaybackState.PLAYING
             and self._attr_elapsed_time is not None
@@ -225,50 +233,3 @@ class MSXPlayer(Player):
             self._attr_elapsed_time += now - self._attr_elapsed_time_last_updated
             self._attr_elapsed_time_last_updated = now
             self.update_state()
-
-        # In flow_mode, the queue controller keeps track of the active track while the
-        # player just plays a single long stream. To keep the MSX UI in sync, we
-        # detect when the current queue item changes and send a metadata update.
-        if self._attr_playback_state != PlaybackState.PLAYING:
-            return
-
-        queue = self.mass.player_queues.get(self.player_id)
-        if not queue or not queue.flow_mode or not queue.current_item:
-            return
-
-        current_item = queue.current_item
-        current_item_id = current_item.queue_item_id
-        if not current_item_id or current_item_id == self._last_queue_item_id:
-            return
-        self._last_queue_item_id = current_item_id
-
-        # Resolve metadata from the current queue item, mirroring play_media logic.
-        title: str | None = None
-        artist: str | None = None
-        image_url: str | None = None
-        duration: int | None = None
-
-        if current_item.media_item:
-            media_item = current_item.media_item
-            title = getattr(media_item, "name", None) or current_item.name
-            artist = getattr(media_item, "artist_str", None) or None
-            duration = getattr(media_item, "duration", None) or current_item.duration
-        else:
-            title = current_item.name or None
-            duration = current_item.duration or None
-
-        if current_item.image:
-            image_url = self.mass.metadata.get_image_url(
-                current_item.image,
-                size=500,
-                prefer_stream_server=True,
-            )
-
-        provider = cast("MSXBridgeProvider", self.provider)
-        provider.notify_track_updated(
-            self.player_id,
-            title=title,
-            artist=artist,
-            image_url=image_url,
-            duration=duration,
-        )

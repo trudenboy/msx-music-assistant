@@ -13,12 +13,10 @@ from .constants import (
     CONF_ABORT_STREAM_FIRST,
     CONF_HTTP_PORT,
     CONF_OUTPUT_FORMAT,
-    CONF_PLAYBACK_MODE,
     CONF_PLAYER_IDLE_TIMEOUT,
     DEFAULT_ABORT_STREAM_FIRST,
     DEFAULT_HTTP_PORT,
     DEFAULT_OUTPUT_FORMAT,
-    DEFAULT_PLAYBACK_MODE,
     DEFAULT_PLAYER_IDLE_TIMEOUT,
     MSX_PLAYER_ID_PREFIX,
 )
@@ -39,7 +37,6 @@ class MSXBridgeProvider(PlayerProvider):
         super().__init__(*args, **kwargs)
         self._player_last_activity = {}
         self._pending_unregisters = {}
-        self._playback_mode: str | None = None
 
     async def handle_async_init(self) -> None:
         """Handle async initialization — start embedded HTTP server."""
@@ -53,21 +50,6 @@ class MSXBridgeProvider(PlayerProvider):
         await super().loaded_in_mass()
         self._timeout_task = self.mass.create_task(self._run_idle_timeout_loop())
         self.logger.info("MSX Bridge provider loaded — players register on demand")
-
-    @property
-    def playback_mode(self) -> str:
-        """Return configured playback mode with a safe default.
-
-        The mode controls how MSX and MA coordinate queue/playlist behavior.
-        "legacy" keeps the current behavior; other modes are handled explicitly
-        by HTTP/audio handlers and player logic.
-        """
-        if self._playback_mode is None:
-            self._playback_mode = cast(
-                "str",
-                self.config.get_value(CONF_PLAYBACK_MODE, DEFAULT_PLAYBACK_MODE),
-            )
-        return self._playback_mode
 
     async def unload(self, is_removed: bool = False) -> None:
         """Handle unload — stop timeout task, HTTP server, then unregister players."""
@@ -162,6 +144,8 @@ class MSXBridgeProvider(PlayerProvider):
         artist: str | None = None,
         image_url: str | None = None,
         duration: int | None = None,
+        next_action: str | None = None,
+        prev_action: str | None = None,
     ) -> None:
         """Notify WebSocket clients that playback started (for MA -> MSX push)."""
         if self.http_server:
@@ -171,25 +155,8 @@ class MSXBridgeProvider(PlayerProvider):
                 artist=artist,
                 image_url=image_url,
                 duration=duration,
-            )
-
-    def notify_track_updated(
-        self,
-        player_id: str,
-        *,
-        title: str | None = None,
-        artist: str | None = None,
-        image_url: str | None = None,
-        duration: int | None = None,
-    ) -> None:
-        """Notify WebSocket clients that the current track metadata changed."""
-        if self.http_server:
-            self.http_server.broadcast_play_update(
-                player_id,
-                title=title,
-                artist=artist,
-                image_url=image_url,
-                duration=duration,
+                next_action=next_action,
+                prev_action=prev_action,
             )
 
     def notify_play_stopped(self, player_id: str) -> None:

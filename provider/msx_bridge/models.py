@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -40,7 +39,12 @@ class MsxItem(BaseModel):
     background: str | None = None
     player_label: str | None = Field(None, alias="playerLabel")
     title_footer: str | None = Field(None, alias="titleFooter")
+    duration: int | None = None
+    next_action: str | None = Field(None, alias="nextAction")
+    prev_action: str | None = Field(None, alias="prevAction")
     content: str | None = None
+    url: str | None = None
+    type: str | None = None
 
 
 class MsxContent(BaseModel):

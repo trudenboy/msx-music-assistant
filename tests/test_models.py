@@ -18,16 +18,18 @@ def test_msx_template_serialization() -> None:
 
 
 def test_msx_item_serialization() -> None:
-    """Test MsxItem serialization with aliases."""
+    """Test MsxItem serialization with aliases and duration."""
     item = MsxItem(
         title="Test Title",
         player_label="Test Player Label",
-        title_footer="Test Footer"
+        title_footer="Test Footer",
+        duration=180
     )
     data = item.model_dump(by_alias=True, exclude_none=True)
     assert data["title"] == "Test Title"
     assert data["playerLabel"] == "Test Player Label"
     assert data["titleFooter"] == "Test Footer"
+    assert data["duration"] == 180
 
 
 def test_msx_content_serialization() -> None:
