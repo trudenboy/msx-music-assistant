@@ -646,6 +646,112 @@ async def test_msx_audio_not_msx_player(provider: object, mass_mock: Mock) -> No
         await client.close()
 
 
+async def test_msx_audio_legacy_uses_flow_mode(provider: object, mass_mock: Mock) -> None:
+    """GET /msx/audio should request a flow-mode stream in legacy playback mode."""
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
+    from music_assistant.providers.msx_bridge.player import MSXPlayer
+    from music_assistant_models.player import PlayerMedia
+
+    server = MSXHTTPServer(provider, 0)
+    client = TestClient(TestServer(server.app))
+    await client.start_server()
+    try:
+        # Prepare an MSX player with current_media already set so the audio
+        # handler does not have to wait for the queue controller.
+        player = MSXPlayer(provider, "msx_test", name="Test TV", output_format="mp3")
+        media = PlayerMedia(
+            uri="library://track/1",
+            title=None,
+            artist=None,
+            album=None,
+            image_url=None,
+            duration=None,
+        )
+        player.current_media = media
+        mass_mock.players.get.return_value = player
+
+        # Track metadata resolution returns a duration to allow Content-Length calculation.
+        track = Mock()
+        track.duration = 180
+        mass_mock.music.get_item_by_uri.return_value = track
+
+        # Streams controller returns a simple async generator and we patch ffmpeg
+        # to avoid running a real transcoder.
+        mass_mock.streams = Mock()
+        mass_mock.streams.get_stream = Mock(return_value=_async_iter([b"pcm"]))
+
+        chunks = [b"encoded-chunk-1"]
+        with patch(
+            "music_assistant.providers.msx_bridge.http_server.get_ffmpeg_stream",
+            return_value=_async_iter(chunks),
+        ):
+            resp = await client.get("/msx/audio/msx_test?uri=library://track/1")
+            assert resp.status == 200
+
+        # In legacy mode we always request flow_mode=True.
+        mass_mock.streams.get_stream.assert_called_once()
+        _args, _pos, kwargs = mass_mock.streams.get_stream.mock_calls[0]
+        assert kwargs.get("force_flow_mode") is True
+
+    finally:
+        await client.close()
+
+
+async def test_msx_audio_hybrid_disables_flow_mode(provider: object, mass_mock: Mock) -> None:
+    """GET /msx/audio should disable flow-mode stream in hybrid playlist+queue mode."""
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
+    from music_assistant.providers.msx_bridge.player import MSXPlayer
+    from music_assistant_models.player import PlayerMedia
+
+    server = MSXHTTPServer(provider, 0)
+    client = TestClient(TestServer(server.app))
+    await client.start_server()
+    try:
+        # Force playback_mode into the hybrid playlist+queue mode.
+        provider._playback_mode = "hybrid_playlist_queue"
+
+        player = MSXPlayer(provider, "msx_test", name="Test TV", output_format="mp3")
+        media = PlayerMedia(
+            uri="library://track/1",
+            title=None,
+            artist=None,
+            album=None,
+            image_url=None,
+            duration=None,
+        )
+        player.current_media = media
+        mass_mock.players.get.return_value = player
+
+        track = Mock()
+        track.duration = 120
+        mass_mock.music.get_item_by_uri.return_value = track
+
+        mass_mock.streams = Mock()
+        mass_mock.streams.get_stream = Mock(return_value=_async_iter([b"pcm"]))
+
+        chunks = [b"encoded-chunk-1", b"encoded-chunk-2"]
+        with patch(
+            "music_assistant.providers.msx_bridge.http_server.get_ffmpeg_stream",
+            return_value=_async_iter(chunks),
+        ):
+            resp = await client.get("/msx/audio/msx_test?uri=library://track/1")
+            assert resp.status == 200
+            # For per-track playback we expect a Content-Length header.
+            assert "Content-Length" in resp.headers
+
+        # In hybrid mode the handler should explicitly disable flow_mode.
+        mass_mock.streams.get_stream.assert_called_once()
+        _args, _pos, kwargs = mass_mock.streams.get_stream.mock_calls[0]
+        assert kwargs.get("force_flow_mode") is False
+
+    finally:
+        await client.close()
+
+
 # --- Duration in track formatting ---
 
 

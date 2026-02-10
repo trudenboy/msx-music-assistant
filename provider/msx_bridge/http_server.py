@@ -706,13 +706,17 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             bit_depth=16,
             channels=2,
         )
-        # Always use flow-mode stream for MSX audio so the HTTP
-        # connection stays open across the entire queue instead of
-        # stopping after the first track.
+        # Choose between flow-mode (single long stream) and per-track streams based
+        # on the configured playback mode. In legacy/radio modes we keep using a
+        # flow stream so the HTTP connection stays open across the entire queue.
+        # In the hybrid playlist+queue mode we explicitly request a single-track
+        # stream so MSX can advance its own playlist item-by-item.
+        playback_mode = self.provider.playback_mode
+        use_flow_mode = playback_mode != "hybrid_playlist_queue"
         audio_source = self.provider.mass.streams.get_stream(
             media,
             pcm_format,
-            force_flow_mode=True,
+            force_flow_mode=use_flow_mode,
         )
 
         # Encode PCM → output format via ffmpeg
@@ -739,9 +743,9 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             "aac": 32_000,
         }
         bytes_per_sec = bitrate_map.get(output_format_str, 0)
-        # For MSX we always request a queue-backed (flow) stream above,
-        # so treat any queue item as flow mode here.
-        is_flow_stream = bool(media.source_id and media.queue_item_id)
+        # Treat queue-backed streams as flow mode by default, unless the hybrid
+        # playlist+queue mode explicitly requested a per-track stream above.
+        is_flow_stream = bool(media.source_id and media.queue_item_id) and use_flow_mode
 
         headers: dict[str, str] = {"Content-Type": mime_type}
         if not is_flow_stream and duration and bytes_per_sec:
