@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from aiohttp.test_utils import TestClient
@@ -870,6 +870,109 @@ async def _async_iter(items: list) -> None:
     """Async generator helper for mocking iter_chunked."""
     for item in items:
         yield item
+
+
+# --- MSX queue-playlist endpoint ---
+
+
+async def test_msx_queue_playlist_endpoint(provider: object, mass_mock: Mock) -> None:
+    """GET /msx/queue-playlist/{player_id}.json should return MSX playlist from MA queue."""
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
+
+    qi1 = Mock()
+    qi1.name = "Track 1"
+    qi1.media_item = Mock()
+    qi1.media_item.name = "Track 1"
+    qi1.media_item.uri = "library://track/1"
+    qi1.media_item.duration = 180
+    qi1.media_item.artist_str = "Artist 1"
+    qi1.duration = 180
+    qi1.image = None
+
+    qi2 = Mock()
+    qi2.name = "Track 2"
+    qi2.media_item = Mock()
+    qi2.media_item.name = "Track 2"
+    qi2.media_item.uri = "library://track/2"
+    qi2.media_item.duration = 200
+    qi2.media_item.artist_str = "Artist 2"
+    qi2.duration = 200
+    qi2.image = None
+
+    mass_mock.player_queues.items = AsyncMock(return_value=[qi1, qi2])
+
+    server = MSXHTTPServer(provider, 0)
+    client = TestClient(TestServer(server.app))
+    await client.start_server()
+    try:
+        resp = await client.get("/msx/queue-playlist/msx_test.json?start=0")
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["type"] == "list"
+        assert data["action"] == "player:play"
+        assert len(data["items"]) == 2
+        assert data["items"][0]["title"] == "Track 1"
+        assert data["items"][1]["title"] == "Track 2"
+        assert "from_playlist=1" in data["items"][0]["action"]
+    finally:
+        await client.close()
+
+
+async def test_msx_queue_playlist_with_start_index(
+    provider: object, mass_mock: Mock
+) -> None:
+    """GET /msx/queue-playlist with start=1 should use player:goto:index:1 action."""
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
+
+    qi = Mock()
+    qi.name = "Track 1"
+    qi.media_item = Mock()
+    qi.media_item.name = "Track 1"
+    qi.media_item.uri = "library://track/1"
+    qi.media_item.duration = 180
+    qi.media_item.artist_str = "Artist 1"
+    qi.duration = 180
+    qi.image = None
+
+    mass_mock.player_queues.items = AsyncMock(return_value=[qi])
+
+    server = MSXHTTPServer(provider, 0)
+    client = TestClient(TestServer(server.app))
+    await client.start_server()
+    try:
+        resp = await client.get("/msx/queue-playlist/msx_test.json?start=1")
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["action"] == "player:goto:index:1"
+    finally:
+        await client.close()
+
+
+async def test_msx_queue_playlist_empty_queue(
+    provider: object, mass_mock: Mock
+) -> None:
+    """GET /msx/queue-playlist with empty queue should return empty playlist."""
+    from aiohttp.test_utils import TestClient, TestServer
+
+    from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
+
+    mass_mock.player_queues.items = AsyncMock(return_value=[])
+
+    server = MSXHTTPServer(provider, 0)
+    client = TestClient(TestServer(server.app))
+    await client.start_server()
+    try:
+        resp = await client.get("/msx/queue-playlist/msx_test.json?start=0")
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["type"] == "list"
+        assert data["items"] == []
+    finally:
+        await client.close()
 
 
 class _async_ctx:

@@ -7,6 +7,7 @@ import contextlib
 import json
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote
 
@@ -88,6 +89,11 @@ class MSXHTTPServer:
         )
         self.app.router.add_get(
             "/msx/playlists/{item_id}/tracks.json", self._handle_msx_playlist_tracks
+        )
+
+        # MSX queue playlist (MA queue → MSX native playlist)
+        self.app.router.add_get(
+            "/msx/queue-playlist/{player_id}.json", self._handle_queue_playlist
         )
 
         # MSX playlist endpoints (native MSX playlist JSON)
@@ -716,6 +722,42 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         )
         return web.json_response(playlist.model_dump(by_alias=True, exclude_none=True))
 
+    # --- MSX Queue Playlist ---
+
+    async def _handle_queue_playlist(self, request: web.Request) -> web.Response:
+        """Return the current MA queue as an MSX native playlist."""
+        _, device_param, _ = await self._ensure_player_for_request(request)
+        prefix = f"http://{request.host}"
+        player_id = request.match_info["player_id"]
+        start = int(request.query.get("start", "0"))
+
+        try:
+            queue_items = await self.provider.mass.player_queues.items(player_id)
+        except Exception:
+            logger.warning("Failed to fetch queue items for %s", player_id)
+            queue_items = []
+
+        # Convert QueueItems to track-like objects for map_tracks_to_msx_playlist
+        tracks: list[Any] = []
+        for qi in queue_items:
+            mi = getattr(qi, "media_item", None)
+            tracks.append(
+                SimpleNamespace(
+                    name=getattr(mi, "name", None) or getattr(qi, "name", "") or "",
+                    uri=getattr(mi, "uri", None) or "",
+                    duration=getattr(mi, "duration", None)
+                    or getattr(qi, "duration", 0)
+                    or 0,
+                    artist_str=getattr(mi, "artist_str", "") if mi else "",
+                    image=getattr(qi, "image", None),
+                )
+            )
+
+        playlist = map_tracks_to_msx_playlist(
+            tracks, start, prefix, player_id, self.provider, device_param
+        )
+        return web.json_response(playlist.model_dump(by_alias=True, exclude_none=True))
+
     # --- MSX Audio Playback ---
 
     async def _handle_msx_audio(self, request: web.Request) -> web.StreamResponse:
@@ -970,6 +1012,28 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             payload["next_action"] = next_action
         if prev_action:
             payload["prev_action"] = prev_action
+        msg = json.dumps(payload)
+        for ws in list(clients):
+            if not ws.closed:
+                self.provider.mass.create_task(self._ws_send(ws, msg))
+
+    def broadcast_playlist(self, player_id: str, playlist_url: str) -> None:
+        """Notify subscribed WebSocket clients to load an MSX native playlist."""
+        clients = self._ws_clients.get(player_id, set())
+        if not clients:
+            logger.warning(
+                "broadcast_playlist: no WebSocket clients for player_id=%s (connected: %s)",
+                player_id,
+                list(self._ws_clients.keys()),
+            )
+            return
+        logger.info(
+            "broadcast_playlist: player_id=%s, url=%s, sending to %d client(s)",
+            player_id,
+            playlist_url,
+            len(clients),
+        )
+        payload: dict[str, Any] = {"type": "playlist", "url": playlist_url}
         msg = json.dumps(payload)
         for ws in list(clients):
             if not ws.closed:
