@@ -111,8 +111,6 @@ async def test_pause_none_elapsed(player: MSXPlayer) -> None:
 
 async def test_pause_notifies_stop_on_msx(player: MSXPlayer) -> None:
     """pause() should call provider.notify_play_stopped so MSX closes the player."""
-    from unittest.mock import patch
-
     player._attr_playback_state = PlaybackState.PLAYING
     player._attr_elapsed_time = 10.0
     player._attr_elapsed_time_last_updated = 100.0
