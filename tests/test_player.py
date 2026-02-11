@@ -437,7 +437,7 @@ async def test_play_media_skips_ws_when_playing_from_queue(
 
 
 async def test_play_media_non_queue_sends_broadcast_play(
-    player: MSXPlayer, mass_mock: Mock
+    player: MSXPlayer,
 ) -> None:
     """play_media without queue context should use broadcast_play as before."""
     media = Mock(spec=PlayerMedia)

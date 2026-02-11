@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
+import logging
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
@@ -10,6 +10,8 @@ from .models import MsxContent, MsxItem, MsxTemplate
 
 if TYPE_CHECKING:
     from .provider import MSXBridgeProvider
+
+logger = logging.getLogger(__name__)
 
 
 def append_device_param(url: str, device_param: str) -> str:
@@ -35,15 +37,12 @@ async def get_album_image_fallback(album: Any, provider: MSXBridgeProvider) -> s
             if hasattr(track, "image") and track.image:
                 return provider.mass.metadata.get_image_url(track.image)
     except Exception:
-        pass
+        logger.debug("Failed to fetch album image fallback for %s", album.item_id)
     return None
 
 
 async def map_album_to_msx(
-    album: Any,
-    prefix: str,
-    provider: MSXBridgeProvider,
-    device_param: str = ""
+    album: Any, prefix: str, provider: MSXBridgeProvider, device_param: str = ""
 ) -> MsxItem:
     """Map a MA Album to an MSX Item."""
     image = get_image_url(album, provider)
@@ -55,37 +54,31 @@ async def map_album_to_msx(
         title=album.name,
         label=getattr(album, "artist_str", ""),
         image=image,
-        action=f"content:{append_device_param(url, device_param)}"
+        action=f"content:{append_device_param(url, device_param)}",
     )
 
 
 def map_artist_to_msx(
-    artist: Any,
-    prefix: str,
-    provider: MSXBridgeProvider,
-    device_param: str = ""
+    artist: Any, prefix: str, provider: MSXBridgeProvider, device_param: str = ""
 ) -> MsxItem:
     """Map a MA Artist to an MSX Item."""
     url = f"{prefix}/msx/artists/{artist.item_id}/albums.json"
     return MsxItem(
         title=artist.name,
         image=get_image_url(artist, provider),
-        action=f"content:{append_device_param(url, device_param)}"
+        action=f"content:{append_device_param(url, device_param)}",
     )
 
 
 def map_playlist_to_msx(
-    playlist: Any,
-    prefix: str,
-    provider: MSXBridgeProvider,
-    device_param: str = ""
+    playlist: Any, prefix: str, provider: MSXBridgeProvider, device_param: str = ""
 ) -> MsxItem:
     """Map a MA Playlist to an MSX Item."""
     url = f"{prefix}/msx/playlists/{playlist.item_id}/tracks.json"
     return MsxItem(
         title=playlist.name,
         image=get_image_url(playlist, provider),
-        action=f"content:{append_device_param(url, device_param)}"
+        action=f"content:{append_device_param(url, device_param)}",
     )
 
 
@@ -141,10 +134,11 @@ def map_tracks_to_msx_playlist(
         duration = getattr(track, "duration", 0) or 0
         duration_str = f"{duration // 60}:{duration % 60:02d}" if duration else ""
         artist = getattr(track, "artist_str", "")
-        label = f"{artist} · {duration_str}" if artist and duration_str else (artist or duration_str)
+        label = f"{artist} · {duration_str}" if artist and duration_str else artist or duration_str
         image_url = get_image_url(track, provider)
 
-        audio_url = f"{prefix}/msx/audio/{player_id}.mp3?uri={quote(track.uri, safe='')}&from_playlist=1"
+        encoded_uri = quote(track.uri, safe="")
+        audio_url = f"{prefix}/msx/audio/{player_id}.mp3?uri={encoded_uri}&from_playlist=1"
         audio_url = append_device_param(audio_url, device_param)
 
         msx_items.append(

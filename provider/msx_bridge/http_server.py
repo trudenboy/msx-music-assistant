@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote
 
 from aiohttp import web
-from music_assistant_models.enums import ContentType, MediaType
+from music_assistant_models.enums import ContentType
 from music_assistant_models.media_items import AudioFormat
 
 from music_assistant.helpers.ffmpeg import get_ffmpeg_stream
@@ -92,9 +92,7 @@ class MSXHTTPServer:
         )
 
         # MSX queue playlist (MA queue → MSX native playlist)
-        self.app.router.add_get(
-            "/msx/queue-playlist/{player_id}.json", self._handle_queue_playlist
-        )
+        self.app.router.add_get("/msx/queue-playlist/{player_id}.json", self._handle_queue_playlist)
 
         # MSX playlist endpoints (native MSX playlist JSON)
         self.app.router.add_get(
@@ -243,7 +241,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
     async def _handle_msx_plugin_html(self, request: web.Request) -> web.Response:
         """Serve plugin.html with no-cache so MSX always gets latest menu order."""
         path = STATIC_DIR / "plugin.html"
-        response = cast(web.Response, web.FileResponse(path))
+        response = cast("web.Response", web.FileResponse(path))
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -373,7 +371,11 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         playlist_base = append_device_param(playlist_base, device_param)
         items = [
             map_track_to_msx(
-                t, prefix, player_id, self.provider, device_param,
+                t,
+                prefix,
+                player_id,
+                self.provider,
+                device_param,
                 playlist_url=f"{playlist_base}&start={idx}",
             )
             for idx, t in enumerate(tracks)
@@ -401,7 +403,11 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         playlist_base = append_device_param(playlist_base, device_param)
         items = [
             map_track_to_msx(
-                t, prefix, player_id, self.provider, device_param,
+                t,
+                prefix,
+                player_id,
+                self.provider,
+                device_param,
                 playlist_url=f"{playlist_base}{'&' if '?' in playlist_base else '?'}start={idx}",
             )
             for idx, t in enumerate(tracks)
@@ -484,7 +490,11 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         playlist_base = append_device_param(playlist_base, device_param)
         for idx, track in enumerate(results.tracks):
             item = map_track_to_msx(
-                track, prefix, player_id, self.provider, device_param,
+                track,
+                prefix,
+                player_id,
+                self.provider,
+                device_param,
                 playlist_url=f"{playlist_base}&start={idx}",
             )
             item.label = f"Track — {getattr(track, 'artist_str', '')}"
@@ -533,7 +543,11 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         playlist_base = append_device_param(playlist_base, device_param)
         for idx, track in enumerate(results.tracks):
             item = map_track_to_msx(
-                track, prefix, player_id, self.provider, device_param,
+                track,
+                prefix,
+                player_id,
+                self.provider,
+                device_param,
                 playlist_url=f"{playlist_base}&start={idx}",
             )
             item.label = f"Track — {getattr(track, 'artist_str', '')}"
@@ -568,7 +582,11 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         playlist_base = append_device_param(playlist_base, device_param)
         items = [
             map_track_to_msx(
-                t, prefix, player_id, self.provider, device_param,
+                t,
+                prefix,
+                player_id,
+                self.provider,
+                device_param,
                 playlist_url=f"{playlist_base}&start={idx}",
             )
             for idx, t in enumerate(tracks)
@@ -625,7 +643,11 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         playlist_base = append_device_param(playlist_base, device_param)
         items = [
             map_track_to_msx(
-                t, prefix, player_id, self.provider, device_param,
+                t,
+                prefix,
+                player_id,
+                self.provider,
+                device_param,
                 playlist_url=f"{playlist_base}{'&' if '?' in playlist_base else '?'}start={idx}",
             )
             for idx, t in enumerate(tracks)
@@ -732,7 +754,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         start = int(request.query.get("start", "0"))
 
         try:
-            queue_items = await self.provider.mass.player_queues.items(player_id)
+            queue_items = self.provider.mass.player_queues.items(player_id)
         except Exception:
             logger.warning("Failed to fetch queue items for %s", player_id)
             queue_items = []
@@ -745,9 +767,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                 SimpleNamespace(
                     name=getattr(mi, "name", None) or getattr(qi, "name", "") or "",
                     uri=getattr(mi, "uri", None) or "",
-                    duration=getattr(mi, "duration", None)
-                    or getattr(qi, "duration", 0)
-                    or 0,
+                    duration=getattr(mi, "duration", None) or getattr(qi, "duration", 0) or 0,
                     artist_str=getattr(mi, "artist_str", "") if mi else "",
                     image=getattr(qi, "image", None),
                 )
@@ -810,34 +830,24 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         duration = track_duration or media.duration or 0
 
         return await self._serve_audio_stream(
-            request, player, media, duration=duration,
+            request,
+            player,
+            media,
+            duration=duration,
         )
 
-    async def _serve_audio_stream(
-        self,
-        request: web.Request,
-        player: MSXPlayer,
-        media: Any,
-        duration: int = 0,
-    ) -> web.StreamResponse:
-        """Unified method to stream audio from MA to MSX via ffmpeg."""
-        player_id = player.player_id
-        # Get raw PCM audio via MA's internal streaming API
+    @staticmethod
+    def _build_audio_params(
+        output_format_str: str, duration: int
+    ) -> tuple[AudioFormat, AudioFormat, dict[str, str]]:
+        """Build PCM input format, encoded output format, and HTTP headers."""
         pcm_format = AudioFormat(
             content_type=ContentType.PCM_S16LE,
             sample_rate=44100,
             bit_depth=16,
             channels=2,
         )
-        audio_source = self.provider.mass.streams.get_stream(
-            media,
-            pcm_format,
-            force_flow_mode=False,
-        )
-
-        # Encode PCM → output format via ffmpeg
-        output_format_str = player.output_format
-        content_type_map = {
+        content_type_map: dict[str, tuple[ContentType, str]] = {
             "mp3": (ContentType.MP3, "audio/mpeg"),
             "aac": (ContentType.AAC, "audio/aac"),
             "flac": (ContentType.FLAC, "audio/flac"),
@@ -849,11 +859,8 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             bit_depth=16,
             channels=2,
         )
-
-        # Content-Length needed for MSX to play full track (otherwise ~90s cutoff)
         bitrate_map = {"mp3": 40_000, "aac": 32_000}
         bytes_per_sec = bitrate_map.get(output_format_str, 0)
-
         headers: dict[str, str] = {
             "Content-Type": mime_type,
             "Cache-Control": "no-cache",
@@ -862,11 +869,31 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         }
         if duration and bytes_per_sec:
             headers["Content-Length"] = str(int(duration * bytes_per_sec))
+        return pcm_format, out_format, headers
+
+    async def _serve_audio_stream(
+        self,
+        request: web.Request,
+        player: MSXPlayer,
+        media: Any,
+        duration: int = 0,
+    ) -> web.StreamResponse:
+        """Unified method to stream audio from MA to MSX via ffmpeg."""
+        player_id = player.player_id
+        pcm_format, out_format, headers = self._build_audio_params(
+            player.output_format,
+            duration,
+        )
+        audio_source = self.provider.mass.streams.get_stream(
+            media,
+            pcm_format,
+            force_flow_mode=False,
+        )
 
         logger.debug(
             "Serving audio %s: format=%s, duration=%s, Content-Length=%s",
             player_id,
-            output_format_str,
+            player.output_format,
             duration,
             headers.get("Content-Length", "NOT SET"),
         )
@@ -916,6 +943,17 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                         await producer_task
 
         stream_task: asyncio.Task[None] = asyncio.create_task(stream_loop())
+        await self._run_stream_task(player_id, stream_task, transport)
+
+        return response
+
+    async def _run_stream_task(
+        self,
+        player_id: str,
+        stream_task: asyncio.Task[None],
+        transport: Any,
+    ) -> None:
+        """Run a stream task with registration and error handling."""
         self._register_stream(player_id, stream_task, transport)
         try:
             await stream_task
@@ -925,8 +963,6 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             logger.exception("Stream error for player %s", player_id)
         finally:
             self._unregister_stream(player_id, stream_task, transport)
-
-        return response
 
     async def _handle_health(self, request: web.Request) -> web.Response:
         """Health check endpoint."""
@@ -995,7 +1031,7 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
             player_id,
             len(clients),
         )
-        
+
         # We always use direct stream for maximum compatibility.
         play_path = f"/stream/{player_id}"
 
@@ -1116,13 +1152,13 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
 
     # --- Stream Proxy ---
 
-    async def _handle_stream(self, request: web.Request) -> web.StreamResponse:  # noqa: PLR0915
+    async def _handle_stream(self, request: web.Request) -> web.StreamResponse:
         """Stream audio from MA to the TV using internal API."""
         player_id = request.match_info["player_id"]
         # Strip any extensions MSX might have appended (.mp3, .json, etc)
         if "." in player_id:
             player_id = player_id.rsplit(".", 1)[0]
-            
+
         self.provider.on_player_activity(player_id)
         player = self.provider.mass.players.get(player_id)
         if not player or not isinstance(player, MSXPlayer):
@@ -1144,7 +1180,10 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
                     duration = queue_item.duration
 
         return await self._serve_audio_stream(
-            request, player, media, duration=duration,
+            request,
+            player,
+            media,
+            duration=duration,
         )
 
     # --- Library API Routes ---

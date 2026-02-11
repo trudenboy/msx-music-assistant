@@ -1,15 +1,11 @@
 """Tests for MSX Pydantic models."""
 
-from provider.msx_bridge.models import MsxContent, MsxItem, MsxTemplate
+from music_assistant.providers.msx_bridge.models import MsxContent, MsxItem, MsxTemplate
 
 
 def test_msx_template_serialization() -> None:
     """Test MsxTemplate serialization with aliases."""
-    template = MsxTemplate(
-        type="separate",
-        layout="0,0,2,4",
-        image_filler="default"
-    )
+    template = MsxTemplate(type="separate", layout="0,0,2,4", image_filler="default")
     data = template.model_dump(by_alias=True, exclude_none=True)
     assert data["type"] == "separate"
     assert data["layout"] == "0,0,2,4"
@@ -23,7 +19,7 @@ def test_msx_item_serialization() -> None:
         title="Test Title",
         player_label="Test Player Label",
         title_footer="Test Footer",
-        duration=180
+        duration=180,
     )
     data = item.model_dump(by_alias=True, exclude_none=True)
     assert data["title"] == "Test Title"
@@ -37,7 +33,7 @@ def test_msx_content_serialization() -> None:
     content = MsxContent(
         headline="Test Headline",
         template=MsxTemplate(type="list"),
-        items=[MsxItem(title="Item 1"), MsxItem(title="Item 2")]
+        items=[MsxItem(title="Item 1"), MsxItem(title="Item 2")],
     )
     data = content.model_dump(by_alias=True, exclude_none=True)
     assert data["headline"] == "Test Headline"

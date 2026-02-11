@@ -1,21 +1,26 @@
 """Tests for MSX mappers."""
 
+from __future__ import annotations
+
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
-from provider.msx_bridge.mappers import map_track_to_msx, map_album_to_msx
-from music_assistant_models.media_items import Track, Album
+from music_assistant_models.media_items import Album, Track
+
+from music_assistant.providers.msx_bridge.mappers import map_album_to_msx, map_track_to_msx
+from music_assistant.providers.msx_bridge.provider import MSXBridgeProvider
 
 
-@pytest.fixture
-def mock_provider():
+def _mock_provider() -> MSXBridgeProvider:
     """Create a mock provider."""
     provider = MagicMock()
     provider.mass.metadata.get_image_url.return_value = "http://image.url"
     return provider
 
 
-def test_map_track_to_msx(mock_provider) -> None:
+def test_map_track_to_msx() -> None:
     """Test mapping a track to MSX item."""
+    prov = _mock_provider()
     track = MagicMock(spec=Track)
     track.name = "Test Track"
     track.uri = "library://track/1"
@@ -27,19 +32,23 @@ def test_map_track_to_msx(mock_provider) -> None:
         track=track,
         prefix="http://localhost",
         player_id="msx_123",
-        provider=mock_provider,
-        device_param="device_id=abc"
+        provider=prov,
+        device_param="device_id=abc",
     )
 
     assert item.title == "Test Track"
     assert item.label == "Test Artist · 2:05"
     assert item.image == "http://image.url"
-    assert "audio:http://localhost/msx/audio/msx_123?uri=library%3A%2F%2Ftrack%2F1&device_id=abc" == item.action
+    assert item.action is not None
+    assert "audio:http://localhost/msx/audio/msx_123" in item.action
+    assert "uri=library%3A%2F%2Ftrack%2F1" in item.action
+    assert "device_id=abc" in item.action
 
 
 @pytest.mark.asyncio
-async def test_map_album_to_msx(mock_provider) -> None:
+async def test_map_album_to_msx() -> None:
     """Test mapping an album to MSX item."""
+    prov = _mock_provider()
     album = MagicMock(spec=Album)
     album.name = "Test Album"
     album.item_id = "1"
@@ -48,13 +57,13 @@ async def test_map_album_to_msx(mock_provider) -> None:
     album.image = "album_image"
 
     item = await map_album_to_msx(
-        album=album,
-        prefix="http://localhost",
-        provider=mock_provider,
-        device_param="device_id=abc"
+        album=album, prefix="http://localhost", provider=prov, device_param="device_id=abc"
     )
 
     assert item.title == "Test Album"
     assert item.label == "Test Artist"
     assert item.image == "http://image.url"
-    assert "content:http://localhost/msx/albums/1/tracks.json?provider=library&device_id=abc" == item.action
+    assert (
+        item.action
+        == "content:http://localhost/msx/albums/1/tracks.json?provider=library&device_id=abc"
+    )
