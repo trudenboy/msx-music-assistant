@@ -11,10 +11,12 @@ from music_assistant.models.player_provider import PlayerProvider
 
 from .constants import (
     CONF_ABORT_STREAM_FIRST,
+    CONF_ENABLE_GROUPING,
     CONF_HTTP_PORT,
     CONF_OUTPUT_FORMAT,
     CONF_PLAYER_IDLE_TIMEOUT,
     DEFAULT_ABORT_STREAM_FIRST,
+    DEFAULT_ENABLE_GROUPING,
     DEFAULT_HTTP_PORT,
     DEFAULT_OUTPUT_FORMAT,
     DEFAULT_PLAYER_IDLE_TIMEOUT,
@@ -28,6 +30,7 @@ class MSXBridgeProvider(PlayerProvider):
     """Player Provider that bridges Music Assistant to Smart TVs via MSX."""
 
     http_server: MSXHTTPServer | None = None
+    grouping_enabled: bool = True
     _player_last_activity: dict[str, float]
     _pending_unregisters: dict[str, asyncio.Event]
     _timeout_task: asyncio.Task[None] | None = None
@@ -41,9 +44,14 @@ class MSXBridgeProvider(PlayerProvider):
     async def handle_async_init(self) -> None:
         """Handle async initialization — start embedded HTTP server."""
         port = cast("int", self.config.get_value(CONF_HTTP_PORT, DEFAULT_HTTP_PORT))
+        self.grouping_enabled = bool(
+            self.config.get_value(CONF_ENABLE_GROUPING, DEFAULT_ENABLE_GROUPING)
+        )
         self.http_server = MSXHTTPServer(self, port)
         await self.http_server.start()
-        self.logger.info("MSX Bridge provider initialized, HTTP server on port %s", port)
+        self.logger.info(
+            "MSX Bridge provider initialized, HTTP server on port %s", port
+        )
 
     async def loaded_in_mass(self) -> None:
         """Start idle timeout task after provider is loaded."""
@@ -81,7 +89,9 @@ class MSXBridgeProvider(PlayerProvider):
         """
         # Wait for any pending unregister to complete (race condition handling)
         if pending_event := self._pending_unregisters.get(player_id):
-            self.logger.debug("Waiting for pending unregister of %s before registering", player_id)
+            self.logger.debug(
+                "Waiting for pending unregister of %s before registering", player_id
+            )
             await pending_event.wait()
         existing = self.mass.players.get(player_id, raise_unavailable=False)
         if existing and isinstance(existing, MSXPlayer):
@@ -96,6 +106,7 @@ class MSXBridgeProvider(PlayerProvider):
             player_id=player_id,
             name=name,
             output_format=output_format,
+            grouping_enabled=self.grouping_enabled,
         )
         await self.mass.players.register(player)
         self._player_last_activity[player_id] = time.time()
@@ -200,7 +211,9 @@ class MSXBridgeProvider(PlayerProvider):
         """Background task: unregister players idle longer than configured timeout."""
         timeout_minutes = cast(
             "int",
-            self.config.get_value(CONF_PLAYER_IDLE_TIMEOUT, DEFAULT_PLAYER_IDLE_TIMEOUT),
+            self.config.get_value(
+                CONF_PLAYER_IDLE_TIMEOUT, DEFAULT_PLAYER_IDLE_TIMEOUT
+            ),
         )
         interval_seconds = 60
         while not self.mass.closing:
@@ -220,4 +233,6 @@ class MSXBridgeProvider(PlayerProvider):
                         player.player_id,
                         timeout_minutes,
                     )
-                    self.mass.create_task(self._handle_player_unregister(player.player_id))
+                    self.mass.create_task(
+                        self._handle_player_unregister(player.player_id)
+                    )

@@ -104,6 +104,7 @@ def config_mock() -> Mock:
             "http_port": 8099,
             "output_format": "mp3",
             "log_level": "GLOBAL",
+            "enable_player_grouping": True,
         }.get(key, default)
     )
     return config

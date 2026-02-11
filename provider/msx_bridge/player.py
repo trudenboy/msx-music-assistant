@@ -20,6 +20,7 @@ class MSXPlayer(Player):
     current_stream_url: str | None = None
     output_format: str = "mp3"
     _skip_ws_notify: bool = False
+    _propagating: bool = False
 
     def __init__(
         self,
@@ -27,6 +28,8 @@ class MSXPlayer(Player):
         player_id: str,
         name: str = "MSX TV",
         output_format: str = "mp3",
+        *,
+        grouping_enabled: bool = True,
     ) -> None:
         """Initialize the MSX Player."""
         super().__init__(provider, player_id)
@@ -34,10 +37,11 @@ class MSXPlayer(Player):
         self._attr_type = PlayerType.PLAYER
         self._attr_supported_features = {
             PlayerFeature.PAUSE,
-            PlayerFeature.SET_MEMBERS,
             PlayerFeature.VOLUME_SET,
         }
-        self._attr_can_group_with = {provider.instance_id}
+        if grouping_enabled:
+            self._attr_supported_features.add(PlayerFeature.SET_MEMBERS)
+            self._attr_can_group_with = {provider.instance_id}
         self._attr_device_info = DeviceInfo(
             model="Smart TV (MSX)",
             manufacturer="MSX Bridge",
@@ -74,12 +78,18 @@ class MSXPlayer(Player):
         image_url = media.image_url
         duration = media.duration
         if media.source_id and media.queue_item_id:
-            queue_item = self.mass.player_queues.get_item(media.source_id, media.queue_item_id)
+            queue_item = self.mass.player_queues.get_item(
+                media.source_id, media.queue_item_id
+            )
             if queue_item:
                 if queue_item.media_item:
                     title = getattr(queue_item.media_item, "name", None) or title
-                    artist = getattr(queue_item.media_item, "artist_str", None) or artist
-                    duration = getattr(queue_item.media_item, "duration", None) or duration
+                    artist = (
+                        getattr(queue_item.media_item, "artist_str", None) or artist
+                    )
+                    duration = (
+                        getattr(queue_item.media_item, "duration", None) or duration
+                    )
                 if queue_item.image:
                     image_url = self.mass.metadata.get_image_url(
                         queue_item.image, size=500, prefer_stream_server=True
@@ -109,48 +119,57 @@ class MSXPlayer(Player):
         await self._propagate_to_group_members("play_media", media=media)
 
     def _get_group_member_ids(self) -> list[str]:
-        """
-        Get IDs of all players in our group (excluding self).
+        """Get IDs of group members (excluding self).
 
-        Handles both direct grouping (our group_members) and SyncGroup (active_group).
+        Only returns members when this player is the sync leader.
+        MA's SyncGroupPlayer forwards play_media to the sync leader,
+        whose group_members already contains all SyncGroup members.
         """
         if self.synced_to is not None:
             return []
-        member_ids: list[str] = []
-        if self.active_group:
-            group_player = self.mass.players.get(self.active_group)
-            if group_player:
-                member_ids = list(group_player.group_members)
-        if not member_ids:
-            member_ids = list(self.group_members)
-        return [x for x in member_ids if x != self.player_id]
+        return [x for x in self.group_members if x != self.player_id]
 
     async def _propagate_to_group_members(self, command: str, **kwargs: Any) -> None:
         """Propagate command to group members when we are the leader."""
-        for member_id in self._get_group_member_ids():
-            member = self.mass.players.get(member_id)
-            if not member or not isinstance(member, MSXPlayer) or not member.available:
-                continue
-            try:
-                if command == "play_media":
-                    media = kwargs.get("media")
-                    if media:
-                        # Call member.play_media directly — mass.players.play_media would
-                        # redirect synced/grouped players back to the leader
-                        await member.play_media(media)
-                elif command == "stop":
-                    await member.stop()
-                elif command == "pause":
-                    await member.pause()
-                elif command == "play":
-                    await member.play()
-            except Exception:
-                self.logger.warning(
-                    "Failed to propagate %s to member %s",
-                    command,
-                    member_id,
-                    exc_info=True,
-                )
+        # Skip if grouping is disabled at provider level
+        provider = cast("MSXBridgeProvider", self.provider)
+        if not provider.grouping_enabled:
+            return
+        # Prevent infinite recursion if member.play_media triggers propagation back
+        if self._propagating:
+            return
+        self._propagating = True
+        try:
+            for member_id in self._get_group_member_ids():
+                member = self.mass.players.get(member_id)
+                if (
+                    not member
+                    or not isinstance(member, MSXPlayer)
+                    or not member.available
+                ):
+                    continue
+                try:
+                    if command == "play_media":
+                        media = kwargs.get("media")
+                        if media:
+                            # Call member.play_media directly — mass.players.play_media
+                            # would redirect synced/grouped players back to the leader
+                            await member.play_media(media)
+                    elif command == "stop":
+                        await member.stop()
+                    elif command == "pause":
+                        await member.pause()
+                    elif command == "play":
+                        await member.play()
+                except Exception:
+                    self.logger.warning(
+                        "Failed to propagate %s to member %s",
+                        command,
+                        member_id,
+                        exc_info=True,
+                    )
+        finally:
+            self._propagating = False
 
     async def set_members(
         self,
@@ -196,8 +215,13 @@ class MSXPlayer(Player):
         """Handle PAUSE command — stop playback on MSX but keep queue/position for resume."""
         self.logger.info("pause on %s", self.display_name)
         # Snapshot the elapsed time before pausing
-        if self._attr_elapsed_time is not None and self._attr_elapsed_time_last_updated is not None:
-            self._attr_elapsed_time += time.time() - self._attr_elapsed_time_last_updated
+        if (
+            self._attr_elapsed_time is not None
+            and self._attr_elapsed_time_last_updated is not None
+        ):
+            self._attr_elapsed_time += (
+                time.time() - self._attr_elapsed_time_last_updated
+            )
         self._attr_playback_state = PlaybackState.PAUSED
         self._attr_elapsed_time_last_updated = time.time()
         self.update_state()

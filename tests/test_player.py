@@ -301,3 +301,95 @@ async def test_stop_propagates_to_group_members(
 
     # group_members may include leader; we skip self and propagate only to members
     member.stop.assert_called_once()
+
+
+# --- Grouping: disable and recursion guard ---
+
+
+async def test_propagation_skipped_when_grouping_disabled(
+    provider: object, mass_mock: Mock
+) -> None:
+    """play_media should NOT propagate to members when grouping is disabled."""
+    provider.grouping_enabled = False
+    leader = MSXPlayer(
+        provider,
+        "msx_leader",
+        name="Leader TV",
+        output_format="mp3",
+        grouping_enabled=False,
+    )
+    leader.update_state = Mock()
+    leader._attr_group_members = ["msx_member"]
+    member = MSXPlayer(
+        provider,
+        "msx_member",
+        name="Member TV",
+        output_format="mp3",
+        grouping_enabled=False,
+    )
+    member.play_media = AsyncMock()
+    mass_mock.players.get = Mock(return_value=member)
+
+    media = Mock(spec=PlayerMedia)
+    media.uri = "library://track/123"
+    media.title = None
+    media.artist = None
+    media.image_url = None
+    media.duration = None
+    media.source_id = None
+    media.queue_item_id = None
+
+    with patch.object(leader.provider, "notify_play_started", Mock()):
+        await leader.play_media(media)
+
+    member.play_media.assert_not_called()
+
+
+def test_no_set_members_feature_when_grouping_disabled(provider: object) -> None:
+    """MSXPlayer should not declare SET_MEMBERS when grouping is disabled."""
+    p = MSXPlayer(
+        provider,
+        "msx_nogrouping",
+        name="Solo TV",
+        output_format="mp3",
+        grouping_enabled=False,
+    )
+    p.update_state = Mock()
+    assert PlayerFeature.SET_MEMBERS not in p._attr_supported_features
+    assert p._attr_can_group_with == set()
+
+
+async def test_propagation_recursion_guard(provider: object, mass_mock: Mock) -> None:
+    """Propagation should not recurse when member.play_media triggers propagation."""
+    leader = MSXPlayer(provider, "msx_leader", name="Leader TV", output_format="mp3")
+    leader.update_state = Mock()
+    leader._attr_group_members = ["msx_member"]
+
+    # Create a member whose play_media calls back into leader's propagation
+    member = MSXPlayer(provider, "msx_member", name="Member TV", output_format="mp3")
+    member.update_state = Mock()
+    member._attr_group_members = ["msx_leader"]  # would cause recursion without guard
+
+    mass_mock.players.get = Mock(
+        side_effect=lambda pid: member
+        if pid == "msx_member"
+        else leader
+        if pid == "msx_leader"
+        else None
+    )
+
+    media = Mock(spec=PlayerMedia)
+    media.uri = "library://track/123"
+    media.title = None
+    media.artist = None
+    media.image_url = None
+    media.duration = None
+    media.source_id = None
+    media.queue_item_id = None
+
+    with patch.object(leader.provider, "notify_play_started", Mock()):
+        # This should NOT infinitely recurse
+        await leader.play_media(media)
+
+    # Leader played successfully (no exception from recursion)
+    assert leader._attr_playback_state == PlaybackState.PLAYING
