@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import Mock
 
 from music_assistant_models.enums import ConfigEntryType, PlayerFeature, ProviderFeature
@@ -82,21 +83,17 @@ async def test_setup_with_sync_players(
     assert ProviderFeature.SYNC_PLAYERS in result.supported_features
 
 
-def test_player_grouping_enabled(provider: object) -> None:
+def test_player_grouping_enabled(provider: Any) -> None:
     """MSXPlayer with grouping_enabled=True should have SET_MEMBERS."""
-    p = MSXPlayer(
-        provider, "msx_g", name="Group TV", output_format="mp3", grouping_enabled=True
-    )
-    p.update_state = Mock()
+    p = MSXPlayer(provider, "msx_g", name="Group TV", output_format="mp3", grouping_enabled=True)
+    p.update_state = Mock()  # type: ignore[misc,method-assign]
     assert PlayerFeature.SET_MEMBERS in p._attr_supported_features
     assert len(p._attr_can_group_with) > 0
 
 
-def test_player_grouping_disabled(provider: object) -> None:
+def test_player_grouping_disabled(provider: Any) -> None:
     """MSXPlayer with grouping_enabled=False should NOT have SET_MEMBERS."""
-    p = MSXPlayer(
-        provider, "msx_ng", name="Solo TV", output_format="mp3", grouping_enabled=False
-    )
-    p.update_state = Mock()
+    p = MSXPlayer(provider, "msx_ng", name="Solo TV", output_format="mp3", grouping_enabled=False)
+    p.update_state = Mock()  # type: ignore[misc,method-assign]
     assert PlayerFeature.SET_MEMBERS not in p._attr_supported_features
     assert p._attr_can_group_with == set()

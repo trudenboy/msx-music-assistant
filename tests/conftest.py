@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from typing import Any
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -13,10 +15,10 @@ from music_assistant.providers.msx_bridge.player import MSXPlayer
 from music_assistant.providers.msx_bridge.provider import MSXBridgeProvider
 
 
-async def _empty_async_gen() -> None:
+async def _empty_async_gen() -> AsyncGenerator[Any, None]:
     """Empty async generator for mocking AsyncGenerator return types."""
     return
-    yield  # noqa: RET504  # pragma: no cover — makes it a generator
+    yield  # type: ignore[unreachable]  # pragma: no cover — makes it a generator
 
 
 @pytest.fixture
@@ -54,11 +56,9 @@ def mass_mock(player_config_mock: Mock) -> Mock:
     mass.music.artists.library_items = AsyncMock(return_value=[])
     mass.music.artists.albums = AsyncMock(return_value=[])
     mass.music.playlists.library_items = AsyncMock(return_value=[])
-    mass.music.playlists.tracks = Mock(side_effect=lambda *a, **k: _empty_async_gen())
+    mass.music.playlists.tracks = Mock(side_effect=lambda *_a, **_k: _empty_async_gen())
     mass.music.tracks.library_items = AsyncMock(return_value=[])
-    mass.music.search = AsyncMock(
-        return_value=Mock(artists=[], albums=[], tracks=[], playlists=[])
-    )
+    mass.music.search = AsyncMock(return_value=Mock(artists=[], albums=[], tracks=[], playlists=[]))
 
     # Track metadata resolution
     mass.music.get_item_by_uri = AsyncMock(return_value=None)
@@ -111,9 +111,7 @@ def config_mock() -> Mock:
 
 
 @pytest.fixture
-def provider(
-    mass_mock: Mock, manifest_mock: Mock, config_mock: Mock
-) -> MSXBridgeProvider:
+def provider(mass_mock: Mock, manifest_mock: Mock, config_mock: Mock) -> MSXBridgeProvider:
     """Return an MSXBridgeProvider instance without a real HTTP server."""
     prov = MSXBridgeProvider(mass_mock, manifest_mock, config_mock, set())
     prov.http_server = None
@@ -124,12 +122,12 @@ def provider(
 def player(provider: MSXBridgeProvider) -> MSXPlayer:
     """Return an MSXPlayer with update_state mocked."""
     p = MSXPlayer(provider, "msx_test", name="Test TV", output_format="mp3")
-    p.update_state = Mock()  # prevent full state machinery
+    p.update_state = Mock()  # type: ignore[misc,method-assign]
     return p
 
 
 @pytest.fixture
-async def http_client(provider: MSXBridgeProvider) -> TestClient:
+async def http_client(provider: MSXBridgeProvider) -> AsyncGenerator[TestClient[Any, Any], None]:
     """Return an aiohttp TestClient for the MSX HTTP server."""
     server = MSXHTTPServer(provider, 0)
     client = TestClient(TestServer(server.app))

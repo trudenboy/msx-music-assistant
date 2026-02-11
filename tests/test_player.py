@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 from music_assistant_models.enums import PlaybackState, PlayerFeature, PlayerType
 from music_assistant_models.player import PlayerMedia
 
 from music_assistant.providers.msx_bridge.player import MSXPlayer
-
 
 # --- Initialization and properties ---
 
@@ -26,10 +26,10 @@ def test_init_defaults(player: MSXPlayer) -> None:
     assert player.output_format == "mp3"
 
 
-def test_init_custom_params(provider: object) -> None:
+def test_init_custom_params(provider: Any) -> None:
     """MSXPlayer should accept custom name and output_format."""
     p = MSXPlayer(provider, "msx_custom", name="Living Room TV", output_format="flac")
-    p.update_state = Mock()
+    p.update_state = Mock()  # type: ignore[misc,method-assign]
     assert p._attr_name == "Living Room TV"
     assert p.output_format == "flac"
 
@@ -68,7 +68,7 @@ async def test_play_media(player: MSXPlayer) -> None:
     assert player._attr_elapsed_time == 0
     assert player._attr_elapsed_time_last_updated is not None
     assert player._attr_current_media is media
-    player.update_state.assert_called()
+    player.update_state.assert_called()  # type: ignore[attr-defined]
 
 
 async def test_play_resume(player: MSXPlayer, mass_mock: Mock) -> None:
@@ -93,7 +93,7 @@ async def test_pause_accumulates_time(player: MSXPlayer) -> None:
 
     assert player._attr_playback_state == PlaybackState.PAUSED
     assert player._attr_elapsed_time == 25.0  # 10 + (115 - 100)
-    player.update_state.assert_called()
+    player.update_state.assert_called()  # type: ignore[attr-defined]
 
 
 async def test_pause_none_elapsed(player: MSXPlayer) -> None:
@@ -133,7 +133,7 @@ async def test_stop_clears_all(player: MSXPlayer) -> None:
 
     assert player._attr_playback_state == PlaybackState.IDLE
     assert player._attr_current_media is None
-    assert player._attr_elapsed_time is None
+    assert player._attr_elapsed_time is None  # type: ignore[unreachable]
     assert player._attr_elapsed_time_last_updated is None
     assert player.current_stream_url is None
     player.update_state.assert_called()
@@ -153,7 +153,7 @@ async def test_volume_set(player: MSXPlayer) -> None:
     """volume_set should update volume level and call update_state."""
     await player.volume_set(75)
     assert player._attr_volume_level == 75
-    player.update_state.assert_called()
+    player.update_state.assert_called()  # type: ignore[attr-defined]
 
 
 async def test_poll_updates_elapsed(player: MSXPlayer) -> None:
@@ -168,43 +168,41 @@ async def test_poll_updates_elapsed(player: MSXPlayer) -> None:
 
     assert player._attr_elapsed_time == 15.0  # 10 + (205 - 200)
     assert player._attr_elapsed_time_last_updated == 205.0
-    player.update_state.assert_called()
+    player.update_state.assert_called()  # type: ignore[attr-defined]
 
 
 async def test_poll_noop_when_paused(player: MSXPlayer) -> None:
     """poll() should not update anything when paused."""
     player._attr_playback_state = PlaybackState.PAUSED
     player._attr_elapsed_time = 42.0
-    player.update_state.reset_mock()
+    player.update_state.reset_mock()  # type: ignore[attr-defined]
 
     await player.poll()
 
     assert player._attr_elapsed_time == 42.0
-    player.update_state.assert_not_called()
+    player.update_state.assert_not_called()  # type: ignore[attr-defined]
 
 
 async def test_poll_noop_when_idle(player: MSXPlayer) -> None:
     """poll() should not update anything when idle."""
     player._attr_playback_state = PlaybackState.IDLE
-    player.update_state.reset_mock()
+    player.update_state.reset_mock()  # type: ignore[attr-defined]
 
     await player.poll()
 
-    player.update_state.assert_not_called()
+    player.update_state.assert_not_called()  # type: ignore[attr-defined]
 
 
 # --- Grouping ---
 
 
-async def test_set_members_add_and_remove(provider: object, mass_mock: Mock) -> None:
+async def test_set_members_add_and_remove(provider: Any, mass_mock: Mock) -> None:
     """set_members should add and remove group members."""
     leader = MSXPlayer(provider, "msx_leader", name="Leader TV", output_format="mp3")
-    leader.update_state = Mock()
+    leader.update_state = Mock()  # type: ignore[misc,method-assign]
     member = MSXPlayer(provider, "msx_member", name="Member TV", output_format="mp3")
-    member.update_state = Mock()
-    mass_mock.players.get = Mock(
-        side_effect=lambda pid: member if pid == "msx_member" else None
-    )
+    member.update_state = Mock()  # type: ignore[misc,method-assign]
+    mass_mock.players.get = Mock(side_effect=lambda pid: member if pid == "msx_member" else None)
 
     await leader.set_members(player_ids_to_add=["msx_member"])
 
@@ -216,31 +214,25 @@ async def test_set_members_add_and_remove(provider: object, mass_mock: Mock) -> 
     assert "msx_member" not in leader._attr_group_members
 
 
-async def test_set_members_ignores_self_and_non_msx(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_set_members_ignores_self_and_non_msx(provider: Any, mass_mock: Mock) -> None:
     """set_members should not add self or non-MSX players."""
     leader = MSXPlayer(provider, "msx_leader", name="Leader TV", output_format="mp3")
-    leader.update_state = Mock()
+    leader.update_state = Mock()  # type: ignore[misc,method-assign]
     mass_mock.players.get = Mock(return_value=None)
 
-    await leader.set_members(
-        player_ids_to_add=["msx_leader", "msx_other", "sendspin_123"]
-    )
+    await leader.set_members(player_ids_to_add=["msx_leader", "msx_other", "sendspin_123"])
 
     assert leader._attr_group_members == []
 
 
-async def test_play_media_propagates_to_group_members(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_play_media_propagates_to_group_members(provider: Any, mass_mock: Mock) -> None:
     """play_media should propagate to group members when leader (direct member.play_media)."""
     leader = MSXPlayer(provider, "msx_leader", name="Leader TV", output_format="mp3")
-    leader.update_state = Mock()
+    leader.update_state = Mock()  # type: ignore[misc,method-assign]
     leader._attr_group_members = ["msx_member"]
     member = MSXPlayer(provider, "msx_member", name="Member TV", output_format="mp3")
-    member.update_state = Mock()
-    member.play_media = AsyncMock()
+    member.update_state = Mock()  # type: ignore[misc,method-assign]
+    member.play_media = AsyncMock()  # type: ignore[method-assign]
     mass_mock.players.get = Mock(return_value=member)
 
     media = Mock(spec=PlayerMedia)
@@ -259,12 +251,10 @@ async def test_play_media_propagates_to_group_members(
     member.play_media.assert_called_once_with(media)
 
 
-async def test_play_media_no_propagation_when_empty_group(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_play_media_no_propagation_when_empty_group(provider: Any, mass_mock: Mock) -> None:
     """play_media with empty group_members should not call mass.players.play_media."""
     leader = MSXPlayer(provider, "msx_leader", name="Leader TV", output_format="mp3")
-    leader.update_state = Mock()
+    leader.update_state = Mock()  # type: ignore[misc,method-assign]
     leader._attr_group_members = []
     mass_mock.players.play_media = AsyncMock()
 
@@ -283,15 +273,13 @@ async def test_play_media_no_propagation_when_empty_group(
     mass_mock.players.play_media.assert_not_called()
 
 
-async def test_stop_propagates_to_group_members(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_stop_propagates_to_group_members(provider: Any, mass_mock: Mock) -> None:
     """stop() should propagate to group members when leader."""
     leader = MSXPlayer(provider, "msx_leader", name="Leader TV", output_format="mp3")
-    leader.update_state = Mock()
+    leader.update_state = Mock()  # type: ignore[misc,method-assign]
     leader._attr_group_members = ["msx_member"]
     member = MSXPlayer(provider, "msx_member", name="Member TV", output_format="mp3")
-    member.stop = AsyncMock()
+    member.stop = AsyncMock()  # type: ignore[method-assign]
     mass_mock.players.get = Mock(return_value=member)
 
     with patch.object(leader.provider, "notify_play_stopped", Mock()):
@@ -304,9 +292,7 @@ async def test_stop_propagates_to_group_members(
 # --- Grouping: disable and recursion guard ---
 
 
-async def test_propagation_skipped_when_grouping_disabled(
-    provider: object, mass_mock: Mock
-) -> None:
+async def test_propagation_skipped_when_grouping_disabled(provider: Any, mass_mock: Mock) -> None:
     """play_media should NOT propagate to members when grouping is disabled."""
     provider.grouping_enabled = False
     leader = MSXPlayer(
@@ -316,7 +302,7 @@ async def test_propagation_skipped_when_grouping_disabled(
         output_format="mp3",
         grouping_enabled=False,
     )
-    leader.update_state = Mock()
+    leader.update_state = Mock()  # type: ignore[misc,method-assign]
     leader._attr_group_members = ["msx_member"]
     member = MSXPlayer(
         provider,
@@ -325,7 +311,7 @@ async def test_propagation_skipped_when_grouping_disabled(
         output_format="mp3",
         grouping_enabled=False,
     )
-    member.play_media = AsyncMock()
+    member.play_media = AsyncMock()  # type: ignore[method-assign]
     mass_mock.players.get = Mock(return_value=member)
 
     media = Mock(spec=PlayerMedia)
@@ -343,7 +329,7 @@ async def test_propagation_skipped_when_grouping_disabled(
     member.play_media.assert_not_called()
 
 
-def test_no_set_members_feature_when_grouping_disabled(provider: object) -> None:
+def test_no_set_members_feature_when_grouping_disabled(provider: Any) -> None:
     """MSXPlayer should not declare SET_MEMBERS when grouping is disabled."""
     p = MSXPlayer(
         provider,
@@ -352,20 +338,20 @@ def test_no_set_members_feature_when_grouping_disabled(provider: object) -> None
         output_format="mp3",
         grouping_enabled=False,
     )
-    p.update_state = Mock()
+    p.update_state = Mock()  # type: ignore[misc,method-assign]
     assert PlayerFeature.SET_MEMBERS not in p._attr_supported_features
     assert p._attr_can_group_with == set()
 
 
-async def test_propagation_recursion_guard(provider: object, mass_mock: Mock) -> None:
+async def test_propagation_recursion_guard(provider: Any, mass_mock: Mock) -> None:
     """Propagation should not recurse when member.play_media triggers propagation."""
     leader = MSXPlayer(provider, "msx_leader", name="Leader TV", output_format="mp3")
-    leader.update_state = Mock()
+    leader.update_state = Mock()  # type: ignore[misc,method-assign]
     leader._attr_group_members = ["msx_member"]
 
     # Create a member whose play_media calls back into leader's propagation
     member = MSXPlayer(provider, "msx_member", name="Member TV", output_format="mp3")
-    member.update_state = Mock()
+    member.update_state = Mock()  # type: ignore[misc,method-assign]
     member._attr_group_members = ["msx_leader"]  # would cause recursion without guard
 
     mass_mock.players.get = Mock(
