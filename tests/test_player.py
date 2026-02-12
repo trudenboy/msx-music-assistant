@@ -71,6 +71,45 @@ async def test_play_media(player: MSXPlayer) -> None:
     player.update_state.assert_called()  # type: ignore[attr-defined]
 
 
+async def test_play_media_sets_media_ready_event(player: MSXPlayer) -> None:
+    """play_media should set _media_ready event so wait_for_media returns immediately."""
+    media = Mock(spec=PlayerMedia)
+    media.uri = "http://ma-server/stream/12345"
+
+    assert not player._media_ready.is_set()
+    await player.play_media(media)
+    assert player._media_ready.is_set()
+
+
+async def test_wait_for_media_returns_on_play(player: MSXPlayer) -> None:
+    """wait_for_media should return the media once play_media sets the event."""
+    import asyncio
+
+    media = Mock(spec=PlayerMedia)
+    media.uri = "http://ma-server/stream/12345"
+
+    async def delayed_play() -> None:
+        await asyncio.sleep(0.05)
+        await player.play_media(media)
+
+    asyncio.create_task(delayed_play())
+    result = await player.wait_for_media(timeout=2.0)
+    assert result is media
+
+
+async def test_wait_for_media_timeout(player: MSXPlayer) -> None:
+    """wait_for_media should return None on timeout."""
+    result = await player.wait_for_media(timeout=0.1)
+    assert result is None
+
+
+async def test_stop_clears_media_ready_event(player: MSXPlayer) -> None:
+    """stop() should clear _media_ready event."""
+    player._media_ready.set()
+    await player.stop()
+    assert not player._media_ready.is_set()
+
+
 async def test_play_resume(player: MSXPlayer, mass_mock: Mock) -> None:
     """play() when PAUSED should call queue resume to re-send the track to MSX."""
     player._attr_playback_state = PlaybackState.PAUSED
