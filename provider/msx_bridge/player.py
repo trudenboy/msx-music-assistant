@@ -74,28 +74,7 @@ class MSXPlayer(Player):
         self._attr_elapsed_time_last_updated = time.time()
         self.update_state()
 
-        # In flow_mode, PlayerMedia has title="Music Assistant" and no metadata.
-        # Resolve real metadata from the queue item when available.
-        title = media.title
-        artist = media.artist
-        image_url = media.image_url
-        duration = media.duration
-        if media.source_id and media.queue_item_id:
-            queue_item = self.mass.player_queues.get_item(media.source_id, media.queue_item_id)
-            if queue_item:
-                if queue_item.media_item:
-                    title = getattr(queue_item.media_item, "name", None) or title
-                    artist = getattr(queue_item.media_item, "artist_str", None) or artist
-                    duration = getattr(queue_item.media_item, "duration", None) or duration
-                if queue_item.image:
-                    image_url = self.mass.metadata.get_image_url(
-                        queue_item.image, size=500, prefer_stream_server=True
-                    )
-                if duration is None and queue_item.duration:
-                    duration = queue_item.duration
-                if title is None and queue_item.name:
-                    title = queue_item.name
-
+        title, artist, image_url, duration = self._resolve_media_metadata(media)
         provider = cast("MSXBridgeProvider", self.provider)
 
         if not self._skip_ws_notify:
@@ -138,6 +117,31 @@ class MSXPlayer(Player):
                 )
 
         await self._propagate_to_group_members("play_media", media=media)
+
+    def _resolve_media_metadata(
+        self, media: PlayerMedia
+    ) -> tuple[str | None, str | None, str | None, int | None]:
+        """Resolve real metadata from queue item (flow_mode sends generic metadata)."""
+        title = media.title
+        artist = media.artist
+        image_url = media.image_url
+        duration = media.duration
+        if media.source_id and media.queue_item_id:
+            queue_item = self.mass.player_queues.get_item(media.source_id, media.queue_item_id)
+            if queue_item:
+                if queue_item.media_item:
+                    title = getattr(queue_item.media_item, "name", None) or title
+                    artist = getattr(queue_item.media_item, "artist_str", None) or artist
+                    duration = getattr(queue_item.media_item, "duration", None) or duration
+                if queue_item.image:
+                    image_url = self.mass.metadata.get_image_url(
+                        queue_item.image, size=500, prefer_stream_server=True
+                    )
+                if duration is None and queue_item.duration:
+                    duration = queue_item.duration
+                if title is None and queue_item.name:
+                    title = queue_item.name
+        return title, artist, image_url, duration
 
     def _get_group_member_ids(self) -> list[str]:
         """Get IDs of group members (excluding self).
