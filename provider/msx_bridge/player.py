@@ -285,9 +285,12 @@ class MSXPlayer(Player):
     async def wait_for_media(self, timeout: float = 10.0) -> PlayerMedia | None:
         """Wait for play_media() to set current_media, with timeout.
 
-        Clears the event first so we only detect *new* media assignments.
-        Returns current_media or None on timeout.
+        Fast path: if play_media() already ran (e.g. during queue.play_media),
+        current_media is set — return immediately without waiting.
+        Slow path: clear the event and wait for play_media() to signal.
         """
+        if self._attr_current_media is not None and self._media_ready.is_set():
+            return self._attr_current_media
         self._media_ready.clear()
         try:
             await asyncio.wait_for(self._media_ready.wait(), timeout=timeout)

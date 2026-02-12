@@ -97,6 +97,20 @@ async def test_wait_for_media_returns_on_play(player: MSXPlayer) -> None:
     assert result is media
 
 
+async def test_wait_for_media_fast_path(player: MSXPlayer) -> None:
+    """wait_for_media should return immediately if play_media already ran."""
+    media = Mock(spec=PlayerMedia)
+    media.uri = "http://ma-server/stream/12345"
+
+    # Simulate: queue.play_media already called player.play_media
+    await player.play_media(media)
+    assert player._media_ready.is_set()
+
+    # Fast path — should return instantly without clearing the event
+    result = await player.wait_for_media(timeout=0.1)
+    assert result is media
+
+
 async def test_wait_for_media_timeout(player: MSXPlayer) -> None:
     """wait_for_media should return None on timeout."""
     result = await player.wait_for_media(timeout=0.1)
