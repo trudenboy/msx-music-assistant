@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -83,8 +84,6 @@ async def test_play_media_sets_media_ready_event(player: MSXPlayer) -> None:
 
 async def test_wait_for_media_returns_on_play(player: MSXPlayer) -> None:
     """wait_for_media should return the media once play_media sets the event."""
-    import asyncio
-
     media = Mock(spec=PlayerMedia)
     media.uri = "http://ma-server/stream/12345"
 
