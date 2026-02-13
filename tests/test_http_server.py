@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 from aiohttp.test_utils import TestClient as AiohttpTestClient
 from aiohttp.test_utils import TestServer
+from music_assistant_models.enums import PlaybackState
 from music_assistant_models.player import PlayerMedia
 
 from music_assistant.providers.msx_bridge.http_server import MSXHTTPServer
@@ -859,6 +860,77 @@ async def test_msx_queue_playlist_empty_queue(provider: MSXBridgeProvider, mass_
         assert data["items"] == []
     finally:
         await client.close()
+
+
+# --- WebSocket inbound message handling ---
+
+
+async def test_ws_position_message(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+    """WS position message should update player's elapsed time."""
+    player = MSXPlayer(provider, "msx_test", name="Test TV", output_format="mp3")
+    player.update_state = Mock()  # type: ignore[misc,method-assign]
+    player._attr_playback_state = PlaybackState.PLAYING
+    mass_mock.players.get.return_value = player
+    provider.http_server = MSXHTTPServer(provider, 0)
+
+    server_obj = provider.http_server
+    server_obj._handle_ws_message("msx_test", '{"type": "position", "position": 42.5}')
+
+    assert player._attr_elapsed_time == 42.5
+    assert player._last_ws_position is not None
+
+
+async def test_ws_position_message_unknown_player(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
+    """WS position message for unknown player should not crash."""
+    mass_mock.players.get.return_value = None
+    provider.http_server = MSXHTTPServer(provider, 0)
+
+    # Should not raise
+    provider.http_server._handle_ws_message("msx_unknown", '{"type": "position", "position": 10}')
+
+
+async def test_ws_invalid_json(provider: MSXBridgeProvider) -> None:
+    """WS invalid JSON should not crash."""
+    provider.http_server = MSXHTTPServer(provider, 0)
+    # Should not raise
+    provider.http_server._handle_ws_message("msx_test", "not json")
+
+
+async def test_ws_pause_message(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+    """WS pause message should update position and call cmd_pause."""
+    player = MSXPlayer(provider, "msx_test", name="Test TV", output_format="mp3")
+    player.update_state = Mock()  # type: ignore[misc,method-assign]
+    player._attr_playback_state = PlaybackState.PLAYING
+    player._attr_elapsed_time = 10.0
+    mass_mock.players.get.return_value = player
+    provider.http_server = MSXHTTPServer(provider, 0)
+
+    provider.http_server._handle_ws_message("msx_test", '{"type": "pause", "position": 30.5}')
+
+    assert player._attr_elapsed_time == 30.5
+    assert player._skip_ws_notify is True
+
+
+async def test_ws_resume_message(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+    """WS resume message should call cmd_play."""
+    player = MSXPlayer(provider, "msx_test", name="Test TV", output_format="mp3")
+    player.update_state = Mock()  # type: ignore[misc,method-assign]
+    player._attr_playback_state = PlaybackState.PAUSED
+    mass_mock.players.get.return_value = player
+    provider.http_server = MSXHTTPServer(provider, 0)
+
+    provider.http_server._handle_ws_message("msx_test", '{"type": "resume"}')
+
+    assert player._skip_ws_notify is True
+
+
+async def test_ws_unknown_message_type(provider: MSXBridgeProvider) -> None:
+    """WS unknown message type should not crash."""
+    provider.http_server = MSXHTTPServer(provider, 0)
+    # Should not raise
+    provider.http_server._handle_ws_message("msx_test", '{"type": "unknown_cmd"}')
 
 
 class _AsyncCtx:
