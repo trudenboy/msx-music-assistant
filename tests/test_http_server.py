@@ -874,10 +874,10 @@ async def test_ws_position_message(provider: MSXBridgeProvider, mass_mock: Mock)
     provider.http_server = MSXHTTPServer(provider, 0)
 
     server_obj = provider.http_server
-    server_obj._handle_ws_message("msx_test", '{"type": "position", "position": 42.5}')
+    server_obj._handle_ws_message("msx_test", '{"type": "position", "position": 42.5}')  # type: ignore[attr-defined]
 
     assert player._attr_elapsed_time == 42.5
-    assert player._last_ws_position is not None
+    assert player._last_ws_position is not None  # type: ignore[attr-defined]
 
 
 async def test_ws_position_message_unknown_player(
@@ -888,14 +888,14 @@ async def test_ws_position_message_unknown_player(
     provider.http_server = MSXHTTPServer(provider, 0)
 
     # Should not raise
-    provider.http_server._handle_ws_message("msx_unknown", '{"type": "position", "position": 10}')
+    provider.http_server._handle_ws_message("msx_unknown", '{"type": "position", "position": 10}')  # type: ignore[attr-defined]
 
 
 async def test_ws_invalid_json(provider: MSXBridgeProvider) -> None:
     """WS invalid JSON should not crash."""
     provider.http_server = MSXHTTPServer(provider, 0)
     # Should not raise
-    provider.http_server._handle_ws_message("msx_test", "not json")
+    provider.http_server._handle_ws_message("msx_test", "not json")  # type: ignore[attr-defined]
 
 
 async def test_ws_pause_message(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
@@ -907,7 +907,7 @@ async def test_ws_pause_message(provider: MSXBridgeProvider, mass_mock: Mock) ->
     mass_mock.players.get.return_value = player
     provider.http_server = MSXHTTPServer(provider, 0)
 
-    provider.http_server._handle_ws_message("msx_test", '{"type": "pause", "position": 30.5}')
+    provider.http_server._handle_ws_message("msx_test", '{"type": "pause", "position": 30.5}')  # type: ignore[attr-defined]
 
     assert player._attr_elapsed_time == 30.5
     assert player._skip_ws_notify is True
@@ -921,7 +921,7 @@ async def test_ws_resume_message(provider: MSXBridgeProvider, mass_mock: Mock) -
     mass_mock.players.get.return_value = player
     provider.http_server = MSXHTTPServer(provider, 0)
 
-    provider.http_server._handle_ws_message("msx_test", '{"type": "resume"}')
+    provider.http_server._handle_ws_message("msx_test", '{"type": "resume"}')  # type: ignore[attr-defined]
 
     assert player._skip_ws_notify is True
 
@@ -930,7 +930,7 @@ async def test_ws_unknown_message_type(provider: MSXBridgeProvider) -> None:
     """WS unknown message type should not crash."""
     provider.http_server = MSXHTTPServer(provider, 0)
     # Should not raise
-    provider.http_server._handle_ws_message("msx_test", '{"type": "unknown_cmd"}')
+    provider.http_server._handle_ws_message("msx_test", '{"type": "unknown_cmd"}')  # type: ignore[attr-defined]
 
 
 class _AsyncCtx:
