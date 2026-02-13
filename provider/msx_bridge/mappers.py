@@ -52,10 +52,9 @@ async def map_album_to_msx(
     artist = getattr(album, "artist_str", "")
     year = getattr(album, "year", None)
     # Build footer: "Artist · 2024" or just one
-    if artist and year:
-        footer = f"{artist} · {year}"
-    else:
-        footer = artist or (str(year) if year else None)
+    footer: str | None = (
+        f"{artist} · {year}" if artist and year else (artist or (str(year) if year else None))
+    )
     url = f"{prefix}/msx/albums/{album.item_id}/tracks.json?provider={album.provider}"
     return MsxItem(
         title=album.name,
@@ -83,10 +82,7 @@ def map_playlist_to_msx(
     """Map a MA Playlist to an MSX Item."""
     owner = getattr(playlist, "owner", None)
     prov = getattr(playlist, "provider", None)
-    if owner and prov:
-        footer = f"{owner} · {prov}"
-    else:
-        footer = owner or prov or None
+    footer: str | None = f"{owner} · {prov}" if owner and prov else (owner or prov or None)
     url = f"{prefix}/msx/playlists/{playlist.item_id}/tracks.json"
     return MsxItem(
         title=playlist.name,
@@ -111,10 +107,11 @@ def map_track_to_msx(
     image_url = get_image_url(track, provider)
 
     # Build footer: "Artist · 3:42" or just one of them
-    if artist and duration_str:
-        footer = f"{artist} · {duration_str}"
-    else:
-        footer = artist or duration_str or None
+    footer: str | None = (
+        f"{artist} · {duration_str}"
+        if artist and duration_str
+        else (artist or duration_str or None)
+    )
 
     if playlist_url:
         # playlist: (not auto:) loads the playlist and executes the content
