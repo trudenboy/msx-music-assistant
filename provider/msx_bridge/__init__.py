@@ -49,9 +49,9 @@ async def setup(
     grouping_enabled = bool(
         config.get_value(CONF_ENABLE_GROUPING, DEFAULT_ENABLE_GROUPING)
     )
-    features: set[ProviderFeature] = (
-        {ProviderFeature.SYNC_PLAYERS} if grouping_enabled else set()
-    )
+    features: set[ProviderFeature] = {ProviderFeature.REMOVE_PLAYER}
+    if grouping_enabled:
+        features.add(ProviderFeature.SYNC_PLAYERS)
     return MSXBridgeProvider(mass, manifest, config, features)
 
 
@@ -129,19 +129,14 @@ async def get_config_entries(
                     GROUP_STREAM_MODE_INDEPENDENT,
                 ),
                 ConfigValueOption(
-                    "Shared Buffer - one ffmpeg, multiple readers",
+                    "Shared Buffer - one ffmpeg, multiple readers (less CPU)",
                     GROUP_STREAM_MODE_SHARED,
-                ),
-                ConfigValueOption(
-                    "MA Redirect - redirect to MA Streamserver",
-                    GROUP_STREAM_MODE_REDIRECT,
                 ),
             ],
             description=(
                 "How to stream audio to grouped players. "
-                "'Independent' creates separate streams (more CPU). "
-                "'Shared Buffer' uses one ffmpeg process for all group members (less CPU). "
-                "'MA Redirect' redirects to Music Assistant's streamserver (requires MA 2.6+)."
+                "'Independent' creates separate streams per TV (more CPU, no sync). "
+                "'Shared Buffer' uses one ffmpeg process for all group members (less CPU, better sync)."
             ),
         ),
     )

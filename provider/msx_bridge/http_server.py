@@ -1893,18 +1893,36 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         or "" if using IP fallback.
         """
         device_id = request.query.get("device_id")
+        # Try to get real IP from proxy headers first, then fall back to remote
+        remote_ip = (
+            request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+            or request.headers.get("X-Real-IP", "")
+            or request.remote
+            or "unknown"
+        )
+        
         if device_id:
             sanitized = PLAYER_ID_SANITIZE_RE.sub("_", device_id).strip("_") or "device"
             player_id = f"{MSX_PLAYER_ID_PREFIX}{sanitized}"
             param = f"device_id={quote(device_id, safe='')}"
+            logger.info(
+                "[PlayerID] device_id=%s, remote_ip=%s -> player_id=%s",
+                device_id,
+                remote_ip,
+                player_id,
+            )
         else:
-            remote = request.remote
-            ip = remote if remote else "0_0_0_0"
+            ip = remote_ip if remote_ip != "unknown" else "0_0_0_0"
             sanitized = (
                 PLAYER_ID_SANITIZE_RE.sub("_", ip.replace(".", "_")).strip("_") or "ip"
             )
             player_id = f"{MSX_PLAYER_ID_PREFIX}{sanitized}"
             param = ""
+            logger.info(
+                "[PlayerID] no device_id, remote_ip=%s -> player_id=%s",
+                remote_ip,
+                player_id,
+            )
         return player_id, param
 
     def _append_device_param(self, url: str, device_param: str) -> str:
@@ -1921,12 +1939,19 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         Player may be None if registration failed.
         """
         player_id, device_param = self._get_player_id_and_device_param(request)
+        # Get remote IP for display name
+        remote_ip = (
+            request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+            or request.headers.get("X-Real-IP", "")
+            or request.remote
+            or None
+        )
         # Web kiosk clients pass source=web to distinguish from MSX TV players
         display_name: str | None = None
-        if request.query.get("source") == "web":
-            display_name = self.provider._player_display_name_from_id(
-                player_id, prefix_label="WEB TV"
-            )
+        prefix_label = "WEB TV" if request.query.get("source") == "web" else "MSX TV"
+        display_name = self.provider._player_display_name_from_id(
+            player_id, prefix_label=prefix_label, remote_ip=remote_ip
+        )
         player = await self.provider.get_or_register_player(
             player_id, display_name=display_name
         )

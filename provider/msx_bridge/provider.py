@@ -348,7 +348,7 @@ class MSXBridgeProvider(PlayerProvider):
         return player
 
     def _player_display_name_from_id(
-        self, player_id: str, prefix_label: str = "MSX TV"
+        self, player_id: str, prefix_label: str = "MSX TV", remote_ip: str | None = None
     ) -> str:
         """Build a unique display name from player_id for the MA UI."""
         prefix = MSX_PLAYER_ID_PREFIX
@@ -358,6 +358,20 @@ class MSXBridgeProvider(PlayerProvider):
         # IP-based: msx_192_168_10_15 → "MSX TV (192.168.10.15)"
         if "_" in suffix and all(p.isdigit() for p in suffix.replace("_", " ").split()):
             return f"{prefix_label} ({suffix.replace('_', '.')})"
+        # UUID-based: msx_msx_bc93ce1d_491d_4d95_9430_2fbeabb5ce1b → "MSX TV (bc93)"
+        # Show only first 4 chars of UUID for readability, plus IP if available
+        if suffix.startswith("msx_") and len(suffix) > 12:
+            uuid_part = suffix[4:8]  # First 4 chars after "msx_"
+            if remote_ip:
+                return f"{prefix_label} ({uuid_part}) [{remote_ip}]"
+            return f"{prefix_label} ({uuid_part})"
+        # Fallback: truncate long suffixes
+        if len(suffix) > 12:
+            if remote_ip:
+                return f"{prefix_label} ({suffix[:8]}...) [{remote_ip}]"
+            return f"{prefix_label} ({suffix[:8]}...)"
+        if remote_ip:
+            return f"{prefix_label} ({suffix}) [{remote_ip}]"
         return f"{prefix_label} ({suffix})"
 
     def on_player_activity(self, player_id: str) -> None:
@@ -382,6 +396,18 @@ class MSXBridgeProvider(PlayerProvider):
     def on_player_enabled(self, player_id: str) -> None:
         """Handle player enabled: no-op, player already registered."""
         # Player was never unregistered (see on_player_disabled), so nothing to do.
+
+    async def remove_player(self, player_id: str) -> None:
+        """Remove (delete) a player from this provider.
+
+        Called when user chooses to remove the player from MA.
+        This fully unregisters the player. It will reappear if the TV reconnects.
+        """
+        if self.http_server:
+            self.http_server.broadcast_stop(player_id)
+            self.http_server.cancel_streams_for_player(player_id)
+        await self._handle_player_unregister(player_id)
+        self.logger.info("Player %s removed by user", player_id)
 
     def notify_play_started(
         self,
