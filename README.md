@@ -1,5 +1,7 @@
 # MSX Music Assistant Bridge
 
+English | [Русский](README.ru.md)
+
 Stream your [Music Assistant](https://music-assistant.io/) library to Smart TVs through [Media Station X](https://msx.benzac.de/) with a native TV-optimized interface.
 
 ## Features
@@ -8,10 +10,13 @@ Stream your [Music Assistant](https://music-assistant.io/) library to Smart TVs 
 - **MSX Native UI** — browse albums, artists, playlists, and tracks with remote-control-friendly navigation
 - **Library Browsing** — drill into album tracks, artist albums, playlist tracks, and search results
 - **Audio Playback** — stream audio to the TV through MA's queue system with PCM→ffmpeg encoding
+- **Browser Web Player** — lightweight browser-based player for kitchens, offices, kiosks, and mobile access (`http://<SERVER_IP>:8099/web/`)
+- **Player Grouping** — sync playback across multiple TVs for whole-home audio or commercial spaces (experimental)
+- **MSX Native Playlists** — seamless album/playlist playback with queue integration and TV remote navigation
 - **Dynamic Player Registration** — TVs register as MA players on-demand via device ID or IP, with automatic idle timeout cleanup
 - **Multi-TV Support** — each TV gets its own unique player, identified by MSX device ID
 - **WebSocket Push** — MA-initiated playback (play/stop) pushed to TVs in real-time via WebSocket
-- **Instant Stop & Pause** — Stop and Pause close the MSX player immediately; Resume re-sends the current track
+- **Instant Stop** — Stop closes the MSX player immediately; Pause keeps the player open and pauses playback
 - **Universal TV Support** — works on any TV/device running the MSX app (Samsung Tizen, LG webOS, Android TV, Fire TV, Apple TV, web browsers)
 - **Configurable Output** — MP3, AAC, or FLAC output format
 - **Local Network** — runs entirely on your LAN, no cloud dependencies
@@ -27,10 +32,11 @@ Stream your [Music Assistant](https://music-assistant.io/) library to Smart TVs 
 │ - Audio     │         │  │   └── MSXPlayer                 │  │
 │ - Plugin    │         │  └───────────┬──────────────────────┘  │
 └─────────────┘         │              │ internal API             │
-                        │  ┌───────────▼──────────────────────┐  │
-                        │  │        MA Core                    │  │
-                        │  │  music, players, player_queues    │  │
-                        │  └───────────────────────────────────┘  │
+                        │              │                          │
+┌─────────────┐         │  ┌───────────▼──────────────────────┐  │
+│   Browser   │  HTTP   │  │        MA Core                    │  │
+│ (Web Player)│ ◄─────► │  │  music, players, player_queues    │  │
+└─────────────┘         │  └───────────────────────────────────┘  │
                         └───────────────────────────────────────┘
 ```
 
@@ -114,6 +120,12 @@ You can also visit `http://<YOUR_SERVER_IP>:8099/` in a browser for a status das
 
 ## HTTP Endpoints
 
+### Web Player
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/web/` | Browser-based web player (no MSX app required) |
+
 ### MSX Bootstrap & Static Files
 
 | Method | Path | Description |
@@ -193,7 +205,7 @@ You can also visit `http://<YOUR_SERVER_IP>:8099/` in a browser for a status das
 
 ## Configuration
 
-The provider exposes five config entries in the MA UI:
+The provider exposes six config entries in the MA UI:
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -202,11 +214,12 @@ The provider exposes five config entries in the MA UI:
 | `player_idle_timeout` | `30` | Unregister idle MSX players after this many minutes |
 | `show_stop_notification` | `false` | Show confirmation dialog on MSX when stopping playback from MA |
 | `abort_stream_first` | `false` | When stopping: abort stream connection first, then send WebSocket stop (may help on some TVs) |
+| `enable_player_grouping` | `true` | Allow grouping multiple MSX TVs for synchronized playback (experimental) |
 
 ### Stop, Pause, and Resume
 
 - **Stop** — Closes the MSX player immediately via a double broadcast (same signal as Disable).
-- **Pause** — Closes the MSX player but keeps queue and position in MA; **Play** resumes by re-sending the current track.
+- **Pause** — Pauses playback while keeping the MSX player open; **Play** resumes from the paused position.
 - **Quick stop** — Dashboard button or `POST /api/quick-stop/{player_id}` for direct HTTP control.
 
 ## Development
@@ -249,9 +262,14 @@ provider/msx_bridge/
 ├── provider.py        # MSXBridgeProvider(PlayerProvider) — lifecycle, dynamic player registration, idle timeout
 ├── player.py          # MSXPlayer(Player) — Smart TV as MA player, WebSocket push notifications
 ├── http_server.py     # MSXHTTPServer — aiohttp routes for MSX + API + WebSocket
-├── constants.py       # Config keys and defaults (4 entries)
+├── constants.py       # Config keys and defaults (6 entries)
 ├── manifest.json      # Provider metadata for MA
+├── mappers.py         # MSX JSON mappers for content pages
+├── models.py          # Pydantic models for MSX responses
 └── static/
+    ├── web/                    # Browser-based web player
+    │   ├── index.html          # Web player UI
+    │   └── web.js              # Player logic
     ├── plugin.html             # MSX interaction plugin (device ID, WebSocket, menu)
     ├── input.html              # MSX Input Plugin wrapper (search keyboard)
     ├── input.js                # Input Plugin logic
