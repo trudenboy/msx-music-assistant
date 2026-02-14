@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from music_assistant_models.config_entries import ConfigEntry
+from music_assistant_models.config_entries import ConfigEntry, ConfigValueOption
 from music_assistant_models.enums import ConfigEntryType, ProviderFeature
 
 from .constants import (
@@ -123,20 +123,20 @@ async def get_config_entries(
             label="Group Stream Mode",
             required=False,
             default_value=DEFAULT_GROUP_STREAM_MODE,
-            options=(
-                (
-                    GROUP_STREAM_MODE_INDEPENDENT,
+            options=[
+                ConfigValueOption(
                     "Independent (default) - each TV has own stream",
+                    GROUP_STREAM_MODE_INDEPENDENT,
                 ),
-                (
-                    GROUP_STREAM_MODE_SHARED,
+                ConfigValueOption(
                     "Shared Buffer - one ffmpeg, multiple readers",
+                    GROUP_STREAM_MODE_SHARED,
                 ),
-                (
-                    GROUP_STREAM_MODE_REDIRECT,
+                ConfigValueOption(
                     "MA Redirect - redirect to MA Streamserver",
+                    GROUP_STREAM_MODE_REDIRECT,
                 ),
-            ),
+            ],
             description=(
                 "How to stream audio to grouped players. "
                 "'Independent' creates separate streams (more CPU). "
