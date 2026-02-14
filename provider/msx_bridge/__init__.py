@@ -16,16 +16,21 @@ from music_assistant_models.enums import ConfigEntryType, ProviderFeature
 from .constants import (
     CONF_ABORT_STREAM_FIRST,
     CONF_ENABLE_GROUPING,
+    CONF_GROUP_STREAM_MODE,
     CONF_HTTP_PORT,
     CONF_OUTPUT_FORMAT,
     CONF_PLAYER_IDLE_TIMEOUT,
     CONF_SHOW_STOP_NOTIFICATION,
     DEFAULT_ABORT_STREAM_FIRST,
     DEFAULT_ENABLE_GROUPING,
+    DEFAULT_GROUP_STREAM_MODE,
     DEFAULT_HTTP_PORT,
     DEFAULT_OUTPUT_FORMAT,
     DEFAULT_PLAYER_IDLE_TIMEOUT,
     DEFAULT_SHOW_STOP_NOTIFICATION,
+    GROUP_STREAM_MODE_INDEPENDENT,
+    GROUP_STREAM_MODE_REDIRECT,
+    GROUP_STREAM_MODE_SHARED,
 )
 from .provider import MSXBridgeProvider
 
@@ -110,6 +115,33 @@ async def get_config_entries(
             description=(
                 "Experimental: allow grouping multiple MSX TVs to play the same track "
                 "simultaneously. Disable if you experience issues with multi-TV setups."
+            ),
+        ),
+        ConfigEntry(
+            key=CONF_GROUP_STREAM_MODE,
+            type=ConfigEntryType.STRING,
+            label="Group Stream Mode",
+            required=False,
+            default_value=DEFAULT_GROUP_STREAM_MODE,
+            options=(
+                (
+                    GROUP_STREAM_MODE_INDEPENDENT,
+                    "Independent (default) - each TV has own stream",
+                ),
+                (
+                    GROUP_STREAM_MODE_SHARED,
+                    "Shared Buffer - one ffmpeg, multiple readers",
+                ),
+                (
+                    GROUP_STREAM_MODE_REDIRECT,
+                    "MA Redirect - redirect to MA Streamserver",
+                ),
+            ),
+            description=(
+                "How to stream audio to grouped players. "
+                "'Independent' creates separate streams (more CPU). "
+                "'Shared Buffer' uses one ffmpeg process for all group members (less CPU). "
+                "'MA Redirect' redirects to Music Assistant's streamserver (requires MA 2.6+)."
             ),
         ),
     )
