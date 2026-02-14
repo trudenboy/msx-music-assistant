@@ -157,12 +157,18 @@ class MSXPlayer(Player):
         image_url = media.image_url
         duration = media.duration
         if media.source_id and media.queue_item_id:
-            queue_item = self.mass.player_queues.get_item(media.source_id, media.queue_item_id)
+            queue_item = self.mass.player_queues.get_item(
+                media.source_id, media.queue_item_id
+            )
             if queue_item:
                 if queue_item.media_item:
                     title = getattr(queue_item.media_item, "name", None) or title
-                    artist = getattr(queue_item.media_item, "artist_str", None) or artist
-                    duration = getattr(queue_item.media_item, "duration", None) or duration
+                    artist = (
+                        getattr(queue_item.media_item, "artist_str", None) or artist
+                    )
+                    duration = (
+                        getattr(queue_item.media_item, "duration", None) or duration
+                    )
                 if queue_item.image:
                     image_url = self.mass.metadata.get_image_url(
                         queue_item.image, size=500, prefer_stream_server=True
@@ -198,7 +204,11 @@ class MSXPlayer(Player):
             tasks: list[asyncio.Task[None]] = []
             for member_id in self._get_group_member_ids():
                 member = self.mass.players.get(member_id)
-                if not member or not isinstance(member, MSXPlayer) or not member.available:
+                if (
+                    not member
+                    or not isinstance(member, MSXPlayer)
+                    or not member.available
+                ):
                     continue
                 tasks.append(
                     asyncio.create_task(
@@ -283,8 +293,13 @@ class MSXPlayer(Player):
         """Handle PAUSE command — pause playback on MSX, keep stream alive for resume."""
         self.logger.info("pause on %s", self.display_name)
         # Snapshot the elapsed time before pausing
-        if self._attr_elapsed_time is not None and self._attr_elapsed_time_last_updated is not None:
-            self._attr_elapsed_time += time.time() - self._attr_elapsed_time_last_updated
+        if (
+            self._attr_elapsed_time is not None
+            and self._attr_elapsed_time_last_updated is not None
+        ):
+            self._attr_elapsed_time += (
+                time.time() - self._attr_elapsed_time_last_updated
+            )
         self._attr_playback_state = PlaybackState.PAUSED
         self._attr_elapsed_time_last_updated = time.time()
         self.update_state()

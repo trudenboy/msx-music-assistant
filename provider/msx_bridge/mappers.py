@@ -29,7 +29,9 @@ def get_image_url(item: Any, provider: MSXBridgeProvider) -> str | None:
     return None
 
 
-async def get_album_image_fallback(album: Any, provider: MSXBridgeProvider) -> str | None:
+async def get_album_image_fallback(
+    album: Any, provider: MSXBridgeProvider
+) -> str | None:
     """Get album image from its first track (albums often lack metadata images)."""
     try:
         tracks = await provider.mass.music.albums.tracks(album.item_id, album.provider)
@@ -53,7 +55,9 @@ async def map_album_to_msx(
     year = getattr(album, "year", None)
     # Build footer: "Artist · 2024" or just one
     footer: str | None = (
-        f"{artist} · {year}" if artist and year else (artist or (str(year) if year else None))
+        f"{artist} · {year}"
+        if artist and year
+        else (artist or (str(year) if year else None))
     )
     url = f"{prefix}/msx/albums/{album.item_id}/tracks.json?provider={album.provider}"
     return MsxItem(
@@ -82,7 +86,9 @@ def map_playlist_to_msx(
     """Map a MA Playlist to an MSX Item."""
     owner = getattr(playlist, "owner", None)
     prov = getattr(playlist, "provider", None)
-    footer: str | None = f"{owner} · {prov}" if owner and prov else (owner or prov or None)
+    footer: str | None = (
+        f"{owner} · {prov}" if owner and prov else (owner or prov or None)
+    )
     url = f"{prefix}/msx/playlists/{playlist.item_id}/tracks.json"
     return MsxItem(
         title=playlist.name,
@@ -120,7 +126,9 @@ def map_track_to_msx(
         # Items are rotated so the desired track is at index 0.
         action = f"playlist:{playlist_url}"
     else:
-        audio_url = f"{prefix}/msx/audio/{player_id}.mp3?uri={quote(track.uri, safe='')}"
+        audio_url = (
+            f"{prefix}/msx/audio/{player_id}.mp3?uri={quote(track.uri, safe='')}"
+        )
         action = f"audio:{append_device_param(audio_url, device_param)}"
 
     return MsxItem(
@@ -153,11 +161,17 @@ def map_tracks_to_msx_playlist(
         duration = getattr(track, "duration", 0) or 0
         duration_str = f"{duration // 60}:{duration % 60:02d}" if duration else ""
         artist = getattr(track, "artist_str", "")
-        label = f"{artist} · {duration_str}" if artist and duration_str else artist or duration_str
+        label = (
+            f"{artist} · {duration_str}"
+            if artist and duration_str
+            else artist or duration_str
+        )
         image_url = get_image_url(track, provider)
 
         encoded_uri = quote(track.uri, safe="")
-        audio_url = f"{prefix}/msx/audio/{player_id}.mp3?uri={encoded_uri}&from_playlist=1"
+        audio_url = (
+            f"{prefix}/msx/audio/{player_id}.mp3?uri={encoded_uri}&from_playlist=1"
+        )
         audio_url = append_device_param(audio_url, device_param)
 
         msx_items.append(

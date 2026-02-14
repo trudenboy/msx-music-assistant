@@ -104,7 +104,9 @@ async def test_stream_no_media(provider: MSXBridgeProvider, mass_mock: Mock) -> 
         await client.close()
 
 
-async def test_stream_not_msx_player(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+async def test_stream_not_msx_player(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
     """GET /stream/{id} should return 400 for a non-MSX player."""
     # Return a plain Mock (not spec=MSXPlayer)
     non_msx_player = Mock()
@@ -122,7 +124,9 @@ async def test_stream_not_msx_player(provider: MSXBridgeProvider, mass_mock: Moc
         await client.close()
 
 
-@pytest.mark.skip(reason="stream test hangs with TestClient/streaming on some platforms")
+@pytest.mark.skip(
+    reason="stream test hangs with TestClient/streaming on some platforms"
+)
 async def test_stream_success(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
     """GET /stream/{id} should stream audio via internal API."""
     mock_player = Mock(spec=MSXPlayer)
@@ -381,7 +385,9 @@ def _make_playlist_mock(item_id: int = 1, name: str = "Test Playlist") -> Mock:
     return playlist
 
 
-async def test_msx_albums_have_action(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+async def test_msx_albums_have_action(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
     """GET /msx/albums.json items should have content: action for drill-down."""
     album = _make_album_mock()
     mock_result = Mock()
@@ -403,7 +409,9 @@ async def test_msx_albums_have_action(provider: MSXBridgeProvider, mass_mock: Mo
         await client.close()
 
 
-async def test_msx_artists_have_action(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+async def test_msx_artists_have_action(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
     """GET /msx/artists.json items should have content: action for drill-down."""
     artist = _make_artist_mock()
     mock_result = Mock()
@@ -425,7 +433,9 @@ async def test_msx_artists_have_action(provider: MSXBridgeProvider, mass_mock: M
         await client.close()
 
 
-async def test_msx_playlists_have_action(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+async def test_msx_playlists_have_action(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
     """GET /msx/playlists.json items should have content: action for drill-down."""
     playlist = _make_playlist_mock()
     mock_result = Mock()
@@ -447,7 +457,9 @@ async def test_msx_playlists_have_action(provider: MSXBridgeProvider, mass_mock:
         await client.close()
 
 
-async def test_msx_tracks_have_action(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+async def test_msx_tracks_have_action(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
     """GET /msx/tracks.json items should have playlist: action for playback."""
     track = _make_track_mock()
     mock_result = Mock()
@@ -519,14 +531,20 @@ async def test_msx_artist_albums(provider: MSXBridgeProvider, mass_mock: Mock) -
         await client.close()
 
 
-async def test_msx_playlist_tracks(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+async def test_msx_playlist_tracks(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
     """GET /msx/playlists/{id}/tracks.json should return tracks with audio actions."""
     track = _make_track_mock()
 
-    async def _mock_playlist_tracks(*_args: object, **_kwargs: object) -> AsyncGenerator[Any, None]:
+    async def _mock_playlist_tracks(
+        *_args: object, **_kwargs: object
+    ) -> AsyncGenerator[Any, None]:
         yield track
 
-    mass_mock.music.playlists.tracks = Mock(side_effect=lambda *_a, **_k: _mock_playlist_tracks())
+    mass_mock.music.playlists.tracks = Mock(
+        side_effect=lambda *_a, **_k: _mock_playlist_tracks()
+    )
 
     server = MSXHTTPServer(provider, 0)
     client = AiohttpTestClient(TestServer(server.app))
@@ -562,7 +580,9 @@ async def test_msx_audio_player_not_found(http_client: TestClient[Any, Any]) -> 
     assert resp.status == 404
 
 
-async def test_msx_audio_not_msx_player(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+async def test_msx_audio_not_msx_player(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
     """GET /msx/audio/{id}?uri=x should return 400 for non-MSX player."""
     non_msx_player = Mock()
     mass_mock.players.get.return_value = non_msx_player
@@ -579,7 +599,9 @@ async def test_msx_audio_not_msx_player(provider: MSXBridgeProvider, mass_mock: 
         await client.close()
 
 
-async def test_msx_audio_per_track_mode(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+async def test_msx_audio_per_track_mode(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
     """GET /msx/audio should always use force_flow_mode=False (per-track)."""
     server = MSXHTTPServer(provider, 0)
     client = AiohttpTestClient(TestServer(server.app))
@@ -659,7 +681,9 @@ async def test_msx_audio_from_playlist_skips_ws(
             "music_assistant.providers.msx_bridge.http_server.get_ffmpeg_stream",
             return_value=_async_iter(chunks),
         ):
-            resp = await client.get("/msx/audio/msx_test?uri=library://track/1&from_playlist=1")
+            resp = await client.get(
+                "/msx/audio/msx_test?uri=library://track/1&from_playlist=1"
+            )
             assert resp.status == 200
 
         # _skip_ws_notify should have been True during play_media call
@@ -674,7 +698,9 @@ async def test_msx_audio_from_playlist_skips_ws(
 # --- MSX playlist endpoints ---
 
 
-async def test_msx_album_playlist_endpoint(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+async def test_msx_album_playlist_endpoint(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
     """GET /msx/playlist/album/{id}.json should return playlist JSON."""
     track = _make_track_mock()
     mass_mock.music.albums.tracks.return_value = [track]
@@ -697,14 +723,20 @@ async def test_msx_album_playlist_endpoint(provider: MSXBridgeProvider, mass_moc
         await client.close()
 
 
-async def test_msx_playlist_playlist_endpoint(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+async def test_msx_playlist_playlist_endpoint(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
     """GET /msx/playlist/playlist/{id}.json should return playlist JSON."""
     track = _make_track_mock()
 
-    async def _mock_playlist_tracks(*_args: object, **_kwargs: object) -> AsyncGenerator[Any, None]:
+    async def _mock_playlist_tracks(
+        *_args: object, **_kwargs: object
+    ) -> AsyncGenerator[Any, None]:
         yield track
 
-    mass_mock.music.playlists.tracks = Mock(side_effect=lambda *_a, **_k: _mock_playlist_tracks())
+    mass_mock.music.playlists.tracks = Mock(
+        side_effect=lambda *_a, **_k: _mock_playlist_tracks()
+    )
 
     server = MSXHTTPServer(provider, 0)
     client = AiohttpTestClient(TestServer(server.app))
@@ -720,7 +752,9 @@ async def test_msx_playlist_playlist_endpoint(provider: MSXBridgeProvider, mass_
         await client.close()
 
 
-async def test_msx_tracks_playlist_endpoint(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+async def test_msx_tracks_playlist_endpoint(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
     """GET /msx/playlist/tracks.json should return playlist JSON."""
     track = _make_track_mock()
     mock_result = Mock()
@@ -782,7 +816,9 @@ async def _async_iter(items: list[Any]) -> AsyncGenerator[Any, None]:
 # --- MSX queue-playlist endpoint ---
 
 
-async def test_msx_queue_playlist_endpoint(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+async def test_msx_queue_playlist_endpoint(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
     """GET /msx/queue-playlist/{player_id}.json should return MSX playlist from MA queue."""
     qi1 = Mock()
     qi1.name = "Track 1"
@@ -851,7 +887,9 @@ async def test_msx_queue_playlist_with_start_index(
         await client.close()
 
 
-async def test_msx_queue_playlist_empty_queue(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+async def test_msx_queue_playlist_empty_queue(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
     """GET /msx/queue-playlist with empty queue should return empty playlist."""
     mass_mock.player_queues.items = Mock(return_value=[])
 
@@ -871,7 +909,9 @@ async def test_msx_queue_playlist_empty_queue(provider: MSXBridgeProvider, mass_
 # --- WebSocket inbound message handling ---
 
 
-async def test_ws_position_message(provider: MSXBridgeProvider, mass_mock: Mock) -> None:
+async def test_ws_position_message(
+    provider: MSXBridgeProvider, mass_mock: Mock
+) -> None:
     """WS position message should update player's elapsed time."""
     player = MSXPlayer(provider, "msx_test", name="Test TV", output_format="mp3")
     player.update_state = Mock()  # type: ignore[misc,method-assign]
@@ -894,7 +934,9 @@ async def test_ws_position_message_unknown_player(
     provider.http_server = MSXHTTPServer(provider, 0)
 
     # Should not raise
-    provider.http_server._handle_ws_message("msx_unknown", '{"type": "position", "position": 10}')  # type: ignore[attr-defined]
+    provider.http_server._handle_ws_message(
+        "msx_unknown", '{"type": "position", "position": 10}'
+    )  # type: ignore[attr-defined]
 
 
 async def test_ws_invalid_json(provider: MSXBridgeProvider) -> None:
@@ -913,7 +955,9 @@ async def test_ws_pause_message(provider: MSXBridgeProvider, mass_mock: Mock) ->
     mass_mock.players.get.return_value = player
     provider.http_server = MSXHTTPServer(provider, 0)
 
-    provider.http_server._handle_ws_message("msx_test", '{"type": "pause", "position": 30.5}')  # type: ignore[attr-defined]
+    provider.http_server._handle_ws_message(
+        "msx_test", '{"type": "pause", "position": 30.5}'
+    )  # type: ignore[attr-defined]
 
     assert player._attr_elapsed_time == 30.5
     assert player._skip_ws_notify is True
