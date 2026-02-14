@@ -230,7 +230,14 @@ class MSXHTTPServer:
         """Start the HTTP server."""
         self._runner = web.AppRunner(self.app)
         await self._runner.setup()
-        site = web.TCPSite(self._runner, "0.0.0.0", self.port, reuse_address=True)
+        # reuse_address + reuse_port allow fast restart after reload
+        site = web.TCPSite(
+            self._runner,
+            "0.0.0.0",
+            self.port,
+            reuse_address=True,
+            reuse_port=True,
+        )
         await site.start()
         logger.info("MSX Bridge HTTP server started on port %s", self.port)
 
@@ -299,8 +306,8 @@ code {{ background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }}
         # Version in URL forces MSX to refetch plugin after menu changes (avoids cache)
         start_config = {
             "name": "Music Assistant",
-            "version": "1.0.1",
-            "parameter": f"menu:request:interaction:init@{prefix}/msx/plugin.html?v=3",
+            "version": "1.0.5",
+            "parameter": f"menu:request:interaction:init@{prefix}/msx/plugin.html?v=7",
         }
         return web.json_response(start_config)
 

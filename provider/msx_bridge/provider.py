@@ -137,7 +137,8 @@ class SharedGroupStream:
         Yields:
             Audio chunks (bytes). First yields catch-up buffer, then live chunks.
         """
-        q: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=64)
+        # Large queue to handle slow readers (TV with weak WiFi)
+        q: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=512)
 
         async with self._lock:
             self.subscribers[player_id] = q
