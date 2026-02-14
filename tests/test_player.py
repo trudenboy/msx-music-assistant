@@ -461,7 +461,7 @@ async def test_play_media_queue_sends_playlist(player: MSXPlayer, mass_mock: Moc
     ):
         await player.play_media(media)
 
-    mock_playlist.assert_called_once_with("msx_test", 2)
+    mock_playlist.assert_called_once_with("msx_test", 2, queue_id="msx_test")
     mock_play.assert_not_called()
     assert player._playing_from_queue is True
     assert player._playlist_offset == 2

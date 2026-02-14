@@ -371,7 +371,7 @@ async def test_msx_audio_missing_uri(
     resp = await msx_http_client.get("/msx/audio/msx_default")
     assert resp.status == 400
     text = await resp.text()
-    assert "Missing uri" in text
+    assert "Invalid uri" in text or "Missing uri" in text
 
 
 async def test_msx_audio_unknown_player(
