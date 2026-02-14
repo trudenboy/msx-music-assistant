@@ -52,7 +52,7 @@ EOF
 
 ## Player Grouping (Experimental)
 
-Synchronize playback across multiple TVs for whole-home audio or commercial spaces.
+Synchronized playback control across multiple TVs. Note: this feature synchronizes play/pause/stop/next/prev commands, but does not sync the audio streams themselves — each TV fetches its own independent stream, so there may be slight timing differences between devices.
 
 ### Use Cases
 
@@ -91,10 +91,11 @@ MA Group Command
 
 ### Limitations
 
-- Slight delay between TVs (~100-500ms depending on network latency)
+- **No audio stream synchronization** — each TV receives its own independent audio stream, so playback timing may differ by 100-500ms+ between devices
 - Volume syncs but may need individual adjustment on some TVs
 - Experimental: may have issues with 3+ TVs in poor network conditions
 - All TVs in group must be on the same MA server
+- Not suitable for scenarios requiring precise audio sync (e.g., same room with multiple speakers)
 
 ### Troubleshooting
 

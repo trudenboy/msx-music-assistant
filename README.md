@@ -11,7 +11,7 @@ Stream your [Music Assistant](https://music-assistant.io/) library to Smart TVs 
 - **Library Browsing** — drill into album tracks, artist albums, playlist tracks, and search results
 - **Audio Playback** — stream audio to the TV through MA's queue system with PCM→ffmpeg encoding
 - **Browser Web Player** — lightweight browser-based player for kitchens, offices, kiosks, and mobile access (`http://<SERVER_IP>:8099/web/`)
-- **Player Grouping** — sync playback across multiple TVs for whole-home audio or commercial spaces (experimental)
+- **Player Grouping** — synchronized playback control across multiple TVs (experimental; no audio stream sync, each TV fetches its own stream)
 - **MSX Native Playlists** — seamless album/playlist playback with queue integration and TV remote navigation
 - **Dynamic Player Registration** — TVs register as MA players on-demand via device ID or IP, with automatic idle timeout cleanup
 - **Multi-TV Support** — each TV gets its own unique player, identified by MSX device ID
