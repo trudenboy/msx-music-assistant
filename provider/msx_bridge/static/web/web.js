@@ -9,7 +9,7 @@
  * - Sendspin: Clock-synchronized audio via sendspin-js SDK
  *
  * URL Parameters:
- * - sendspin_url: Enable Sendspin mode with MA server URL (e.g., ?sendspin_url=http://ma:8095)
+ * - sendspin_url: Enable Sendspin mode with Sendspin server URL (e.g., ?sendspin_url=http://ma:8927)
  * - kiosk: Enable kiosk mode (fullscreen player, no sidebar) (e.g., ?kiosk=1)
  */
 
@@ -37,9 +37,10 @@ const SENDSPIN_URL_KEY = 'ma_sendspin_url';
     var sendspinUrl = '';
 
     function getDefaultSendspinUrl() {
-        // Default: same host, port 8095
+        // Default: same host, port 8927 (Sendspin server port)
+        // SDK connects to ws://{baseUrl}/sendspin
         var hostname = location.hostname;
-        return 'http://' + hostname + ':8095';
+        return 'http://' + hostname + ':8927';
     }
 
     function loadAudioModeSettings() {

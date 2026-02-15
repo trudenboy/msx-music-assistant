@@ -107,7 +107,7 @@ class MSXHTTPServer:
         if not sendspin_enabled:
             return False, ""
         host = request.host.split(":")[0]
-        sendspin_server = f"http://{host}:8095"
+        sendspin_server = f"http://{host}:8927"
         return sendspin_enabled, sendspin_server
 
     def _setup_routes(self) -> None:
@@ -284,11 +284,11 @@ class MSXHTTPServer:
             player_rows.append(row)
         player_info = "".join(player_rows) if player_rows else ""
 
-        # Build Sendspin URL (MA server, typically port 8095)
+        # Build Sendspin URL (Sendspin server port 8927)
         host_parts = request.host.split(":")
         hostname = host_parts[0]
-        ma_port = "8095"
-        sendspin_url = f"http://{hostname}:{ma_port}"
+        sendspin_port = "8927"
+        sendspin_url = f"http://{hostname}:{sendspin_port}"
         sendspin_web_url = f"{base}/web?sendspin_url={quote(sendspin_url, safe='')}"
         sendspin_kiosk_url = f"{sendspin_web_url}&kiosk=1"
 
@@ -339,7 +339,7 @@ small {{ color: #666; display: block; margin-top: 4px; }}
 </div>
 <div class="link-row" style="margin-top: 12px;">
 <strong>Custom Sendspin URL:</strong><br>
-<code>/web?sendspin_url=http://&lt;ma-server&gt;:8095&amp;kiosk=1</code>
+<code>/web?sendspin_url=http://&lt;ma-server&gt;:8927&amp;kiosk=1</code>
 </div>
 </div>
 
@@ -382,8 +382,8 @@ small {{ color: #666; display: block; margin-top: 4px; }}
             self.provider.config.get_value(CONF_SENDSPIN_ENABLED, DEFAULT_SENDSPIN_ENABLED)
         )
         host = request.host.split(":")[0]
-        # Default MA Sendspin server URL (same host, port 8095)
-        sendspin_server = f"http://{host}:8095"
+        # Default Sendspin server URL (same host, port 8927)
+        sendspin_server = f"http://{host}:8927"
 
         # Replace placeholders in plugin.html
         content = content.replace(
