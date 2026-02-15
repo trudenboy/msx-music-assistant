@@ -643,21 +643,15 @@
                     }]
                 });
             } else if (dataId === "kiosk-content") {
-                // Return fullscreen content page
+                // Return fullscreen content page with selectable button
                 callback({
-                    headline: "",
-                    template: {
-                        type: "separate",
-                        layout: "0,0,0,0",
-                        icon: "blank",
-                        color: "msx-black"
-                    },
+                    headline: "Now Playing",
                     items: [{
-                        type: "default",
-                        layout: "0,0,12,6",
-                        color: "msx-black",
-                        label: "♫ Waiting for playback...",
-                        enable: true
+                        type: "button",
+                        layout: "4,2,4,2",
+                        label: "Waiting for playback...",
+                        icon: "music-note",
+                        action: "info:Control playback from Music Assistant"
                     }]
                 });
             } else {
