@@ -138,6 +138,7 @@ class MSXHTTPServer:
         self.app.router.add_get(
             "/msx/kiosk-plugin.html", self._handle_kiosk_plugin_html
         )
+        self.app.router.add_get("/msx/kiosk.html", self._handle_kiosk_html)
 
         # MSX content pages (native MSX JSON navigation)
         self.app.router.add_get("/msx/menu.json", self._handle_msx_menu)
@@ -384,11 +385,12 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 "parameter": f"menu:request:interaction:init@{prefix}/msx/plugin.html?v=8",
             }
         else:
-            # Kiosk mode - use menu: with interaction plugin
+            # Kiosk mode - fullscreen panel with kiosk page
             hostname = host.split(":")[0]
             sendspin_server = f"http://{hostname}:8927"
-            kiosk_params = (
-                f"mode={kiosk_mode}"
+            kiosk_url = (
+                f"{prefix}/msx/kiosk.html"
+                f"?mode={kiosk_mode}"
                 f"&controls={str(show_controls).lower()}"
                 f"&sendspin_server={quote(sendspin_server, safe='')}"
                 f"&bridge={quote(prefix, safe='')}"
@@ -396,7 +398,7 @@ small {{ color: #666; display: block; margin-top: 4px; }}
             start_config = {
                 "name": "Music Assistant Kiosk",
                 "version": "1.0.6",
-                "parameter": f"menu:request:interaction:init@{prefix}/msx/kiosk-plugin.html?{kiosk_params}",
+                "parameter": f"panel:{kiosk_url}",
             }
 
         return web.json_response(start_config)
@@ -501,6 +503,46 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         )
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         return response
+
+    async def _handle_kiosk_html(self, request: web.Request) -> web.Response:
+        """Serve standalone kiosk page for MSX panel mode."""
+        path = STATIC_DIR / "kiosk.html"
+        content = path.read_text(encoding="utf-8")
+
+        # Get settings from query params or config
+        kiosk_mode = request.query.get("mode", MSX_KIOSK_MODE_STANDARD)
+        show_controls = request.query.get("controls", "true") == "true"
+        host = request.host.split(":")[0]
+        sendspin_server = request.query.get("sendspin_server", f"http://{host}:8927")
+        bridge_url = request.query.get("bridge", f"http://{request.host}")
+
+        # Inject configuration
+        content = content.replace(
+            'var KIOSK_MODE = "standard";',
+            f'var KIOSK_MODE = "{kiosk_mode}";',
+        )
+        content = content.replace(
+            "var SHOW_CONTROLS = true;",
+            f"var SHOW_CONTROLS = {str(show_controls).lower()};",
+        )
+        content = content.replace(
+            'var SENDSPIN_SERVER = "";',
+            f'var SENDSPIN_SERVER = "{sendspin_server}";',
+        )
+        content = content.replace(
+            'var BRIDGE_URL = "";',
+            f'var BRIDGE_URL = "{bridge_url}";',
+        )
+
+        return web.Response(
+            text=content,
+            content_type="text/html",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
 
     # --- MSX Content Pages (native MSX JSON) ---
 
