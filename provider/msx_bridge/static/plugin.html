@@ -419,20 +419,46 @@
         } catch(e) {}
     }
 
+    // Check if kiosk mode is enabled via URL parameter
+    function isKioskMode() {
+        var params = new URLSearchParams(window.location.search);
+        return params.get("kiosk") === "1";
+    }
+
     MAHandler.prototype.handleRequest = function(dataId, data, callback) {
         if (dataId === "init") {
             var self = this;
+            var kioskMode = isKioskMode();
             
             var respond = function(deviceId) {
                 // Priority: MSX provided ID > sync methods > localStorage fallback
                 var finalDeviceId = deviceId || getMsxDeviceId() || getOrCreateLocalDeviceId();
-                console.log("MSX Bridge final device_id:", finalDeviceId);
-                callback({
-                    name: "Music Assistant",
-                    version: "1.0.0",
-                    headline: "Music Assistant",
-                    menu: buildMenu(finalDeviceId)
-                });
+                console.log("MSX Bridge final device_id:", finalDeviceId, "kiosk:", kioskMode);
+                
+                if (kioskMode) {
+                    // Kiosk mode: hidden menu, single fake album
+                    callback({
+                        name: "Music Assistant Kiosk",
+                        version: "1.0.0",
+                        headline: "",
+                        style: "flat",
+                        transparent: 1,
+                        menu: [{
+                            icon: "blank",
+                            label: "",
+                            transparent: 1,
+                            data: addDeviceParam(BRIDGE + "/msx/kiosk-album.json", finalDeviceId)
+                        }]
+                    });
+                } else {
+                    // Normal mode: full library menu
+                    callback({
+                        name: "Music Assistant",
+                        version: "1.0.0",
+                        headline: "Music Assistant",
+                        menu: buildMenu(finalDeviceId)
+                    });
+                }
                 var ws = connectPushWebSocket(finalDeviceId);
                 // Send debug info after connection opens
                 if (ws) {

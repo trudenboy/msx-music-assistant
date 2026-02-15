@@ -512,7 +512,9 @@
             var audioAction = "audio:" + audioUrl;
             
             if (logger) logger.debug("Playing: " + audioAction);
+            // Execute audio action and show player fullscreen
             TVXInteractionPlugin.executeAction(audioAction, data);
+            TVXInteractionPlugin.executeAction("player:show");
         } else if (msg.type === "playlist" && msg.url) {
             var playlistUrl = BRIDGE_URL + msg.url;
             TVXInteractionPlugin.executeAction("playlist:" + playlistUrl);
@@ -629,19 +631,26 @@
                 
                 if (logger) logger.debug("Kiosk URL: " + kioskUrl);
                 
-                // Return simple content page for kiosk mode
-                // The actual player will be shown when MA sends play command via WebSocket
+                // Return menu structure for kiosk mode
+                // Single menu item, player shows when MA sends play command
                 callback({
-                    cache: false,
+                    name: "Music Assistant Kiosk",
+                    version: "1.0.0",
                     headline: "Music Assistant",
-                    background: "black",
-                    items: [{
-                        type: "button",
-                        layout: "4,2,4,2",
+                    style: "flat",
+                    menu: [{
                         icon: "music-note",
-                        iconSize: "large",
-                        label: "Waiting for playback...",
-                        action: "info:Start playback from Music Assistant app"
+                        label: "Now Playing",
+                        transparent: 1,
+                        data: {
+                            headline: "",
+                            transparent: 1,
+                            items: [{
+                                type: "space",
+                                layout: "0,0,12,6",
+                                text: "{txt:msx-white-soft:Waiting for playback...}"
+                            }]
+                        }
                     }]
                 });
             } else {

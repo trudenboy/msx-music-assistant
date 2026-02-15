@@ -141,6 +141,7 @@ class MSXHTTPServer:
         self.app.router.add_get("/msx/kiosk.html", self._handle_kiosk_html)
         self.app.router.add_get("/msx/kiosk-content.json", self._handle_kiosk_content)
         self.app.router.add_get("/msx/kiosk-page.json", self._handle_kiosk_page)
+        self.app.router.add_get("/msx/kiosk-album.json", self._handle_kiosk_album)
 
         # MSX content pages (native MSX JSON navigation)
         self.app.router.add_get("/msx/menu.json", self._handle_msx_menu)
@@ -387,20 +388,12 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 "parameter": f"menu:request:interaction:init@{prefix}/msx/plugin.html?v=8",
             }
         else:
-            # Kiosk mode - use content: with interaction plugin
-            # content: loads a content page, not a menu
-            hostname = host.split(":")[0]
-            sendspin_server = f"http://{hostname}:8927"
-            kiosk_params = (
-                f"mode={kiosk_mode}"
-                f"&controls={str(show_controls).lower()}"
-                f"&sendspin_server={quote(sendspin_server, safe='')}"
-                f"&bridge={quote(prefix, safe='')}"
-            )
+            # Kiosk mode - use same plugin.html but with kiosk=1 parameter
+            # Plugin will return minimal menu and only handle WebSocket play commands
             start_config = {
                 "name": "Music Assistant Kiosk",
                 "version": "1.0.6",
-                "parameter": f"content:request:interaction:init@{prefix}/msx/kiosk-plugin.html?{kiosk_params}",
+                "parameter": f"menu:request:interaction:init@{prefix}/msx/plugin.html?v=8&kiosk=1",
             }
 
         return web.json_response(start_config)
@@ -547,15 +540,13 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         )
 
     async def _handle_kiosk_page(self, request: web.Request) -> web.Response:
-        """Return simple kiosk content page."""
+        """Return simple kiosk content page - transparent, no visible items."""
         content = {
-            "headline": "Now Playing",
+            "transparent": 1,
+            "headline": "",
             "items": [{
-                "type": "button",
-                "layout": "4,2,4,2",
-                "label": "Waiting for playback...",
-                "icon": "music-note",
-                "action": "info:Control playback from Music Assistant"
+                "type": "space",
+                "layout": "0,0,12,6"
             }]
         }
         return web.json_response(content)
@@ -580,15 +571,39 @@ small {{ color: #666; display: block; margin-top: 4px; }}
             f"&bridge={quote(prefix, safe='')}"
         )
 
-        # Return content page with fullscreen iframe using extension
+        # Return transparent content page with minimal selectable item
         content = {
+            "cache": False,
+            "reuse": False,
+            "transparent": 1,
+            "headline": "",
             "type": "list",
-            "headline": "Now Playing",
-            "extension": kiosk_url,
             "items": [{
-                "type": "space",
-                "layout": "0,0,12,6",
-                "text": ""
+                "type": "default",
+                "layout": "0,0,1,1",
+                "label": " ",
+                "color": "msx-black",
+                "action": "null"
+            }]
+        }
+        return web.json_response(content)
+
+    async def _handle_kiosk_album(self, request: web.Request) -> web.Response:
+        """Return fake album for kiosk mode - waiting for playback."""
+        # Fake album item - just a placeholder
+        content = {
+            "headline": "",
+            "transparent": 1,
+            "template": {
+                "type": "separate",
+                "layout": "0,0,3,4",
+                "color": "msx-glass"
+            },
+            "items": [{
+                "title": "Waiting for playback...",
+                "titleFooter": "Start from Music Assistant",
+                "image": "https://msx.benzac.de/img/default.png",
+                "action": "info:Start playback from Music Assistant app"
             }]
         }
         return web.json_response(content)
