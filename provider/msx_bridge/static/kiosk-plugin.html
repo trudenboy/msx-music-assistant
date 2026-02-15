@@ -626,6 +626,29 @@
                 return true;
             }
         };
+
+        // Handle data requests from MSX
+        this.handleRequest = function(dataId, data, callback) {
+            logger.debug("handleRequest: " + dataId);
+            if (dataId === "init") {
+                // Return empty menu - kiosk has no navigation
+                callback({
+                    headline: "Music Assistant Kiosk",
+                    template: {
+                        type: "pages",
+                        layout: "0,0,12,6",
+                        icon: "msx-white-soft:music-note"
+                    },
+                    items: [{
+                        type: "space",
+                        layout: "0,0,12,6",
+                        text: ""
+                    }]
+                });
+            } else {
+                callback(null);
+            }
+        };
     }
 
     // Initialize plugin
