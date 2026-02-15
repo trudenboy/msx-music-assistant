@@ -631,6 +631,11 @@
         this.handleRequest = function(dataId, data, callback) {
             logger.debug("handleRequest: " + dataId);
             if (dataId === "init") {
+                // Get bridge URL from URL params (before init() runs)
+                var bridgeUrl = TVXServices.urlParams.get("bridge", "") || 
+                                (location.protocol + "//" + location.host);
+                logger.debug("handleRequest init, bridgeUrl: " + bridgeUrl);
+                
                 // Return menu with URL to kiosk content JSON
                 callback({
                     name: "Music Assistant Kiosk",
@@ -639,7 +644,7 @@
                     menu: [{
                         icon: "music-note",
                         label: "Now Playing",
-                        data: BRIDGE_URL + "/msx/kiosk-page.json"
+                        data: bridgeUrl + "/msx/kiosk-page.json"
                     }]
                 });
             } else {
