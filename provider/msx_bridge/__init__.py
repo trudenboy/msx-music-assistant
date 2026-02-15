@@ -18,6 +18,8 @@ from .constants import (
     CONF_ENABLE_GROUPING,
     CONF_GROUP_STREAM_MODE,
     CONF_HTTP_PORT,
+    CONF_MSX_KIOSK_CONTROLS,
+    CONF_MSX_KIOSK_MODE,
     CONF_OUTPUT_FORMAT,
     CONF_PLAYER_IDLE_TIMEOUT,
     CONF_SENDSPIN_ENABLED,
@@ -26,12 +28,17 @@ from .constants import (
     DEFAULT_ENABLE_GROUPING,
     DEFAULT_GROUP_STREAM_MODE,
     DEFAULT_HTTP_PORT,
+    DEFAULT_MSX_KIOSK_CONTROLS,
+    DEFAULT_MSX_KIOSK_MODE,
     DEFAULT_OUTPUT_FORMAT,
     DEFAULT_PLAYER_IDLE_TIMEOUT,
     DEFAULT_SENDSPIN_ENABLED,
     DEFAULT_SHOW_STOP_NOTIFICATION,
     GROUP_STREAM_MODE_INDEPENDENT,
     GROUP_STREAM_MODE_SHARED,
+    MSX_KIOSK_MODE_DISABLED,
+    MSX_KIOSK_MODE_SENDSPIN,
+    MSX_KIOSK_MODE_STANDARD,
 )
 from .provider import MSXBridgeProvider
 
@@ -140,17 +147,42 @@ async def get_config_entries(
                 "'Shared Buffer' uses one ffmpeg process for all group members (less CPU, better sync)."
             ),
         ),
-        # Sendspin integration is disabled for now - MSX uses HTTP streaming with WS sync
-        # ConfigEntry(
-        #     key=CONF_SENDSPIN_ENABLED,
-        #     type=ConfigEntryType.BOOLEAN,
-        #     label="Enable Sendspin synchronized playback",
-        #     required=False,
-        #     default_value=DEFAULT_SENDSPIN_ENABLED,
-        #     description=(
-        #         "Use Sendspin protocol for clock-synchronized audio playback across "
-        #         "multiple TVs. Requires Music Assistant with Sendspin support. "
-        #         "Note: Seek is not supported in this mode."
-        #     ),
-        # ),
+        ConfigEntry(
+            key=CONF_MSX_KIOSK_MODE,
+            type=ConfigEntryType.STRING,
+            label="MSX Kiosk Mode (experimental)",
+            required=False,
+            default_value=DEFAULT_MSX_KIOSK_MODE,
+            options=[
+                ConfigValueOption(
+                    "Disabled - normal MSX with library navigation",
+                    MSX_KIOSK_MODE_DISABLED,
+                ),
+                ConfigValueOption(
+                    "Standard (experimental) - fullscreen player with HTTP streaming",
+                    MSX_KIOSK_MODE_STANDARD,
+                ),
+                ConfigValueOption(
+                    "Sendspin (experimental) - synchronized audio (Android/browser only)",
+                    MSX_KIOSK_MODE_SENDSPIN,
+                ),
+            ],
+            description=(
+                "EXPERIMENTAL: Kiosk mode shows only the player without library navigation. "
+                "'Standard' uses HTTP streaming with WebSocket sync. "
+                "'Sendspin' receives clock-synchronized audio from MA (Android/browser only, "
+                "does not work on Samsung Tizen or macOS MSX app)."
+            ),
+        ),
+        ConfigEntry(
+            key=CONF_MSX_KIOSK_CONTROLS,
+            type=ConfigEntryType.BOOLEAN,
+            label="Show playback controls in Kiosk Mode (experimental)",
+            required=False,
+            default_value=DEFAULT_MSX_KIOSK_CONTROLS,
+            description=(
+                "EXPERIMENTAL: Show play/pause/next/prev buttons on screen in kiosk mode. "
+                "If disabled, control playback only from Music Assistant."
+            ),
+        ),
     )
