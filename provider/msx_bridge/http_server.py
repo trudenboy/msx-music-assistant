@@ -564,18 +564,15 @@ small {{ color: #666; display: block; margin-top: 4px; }}
             f"&bridge={quote(prefix, safe='')}"
         )
 
-        # Return content page with single fullscreen iframe item
+        # Return content page with fullscreen iframe using extension
         content = {
-            "type": "pages",
-            "headline": "",
-            "background": "black",
-            "pages": [{
-                "items": [{
-                    "type": "frame",
-                    "layout": "0,0,12,6",
-                    "offset": "0,0,0,0",
-                    "url": kiosk_url
-                }]
+            "type": "list",
+            "headline": "Now Playing",
+            "extension": kiosk_url,
+            "items": [{
+                "type": "space",
+                "layout": "0,0,12,6",
+                "text": ""
             }]
         }
         return web.json_response(content)
