@@ -150,7 +150,7 @@ async def get_config_entries(
         ConfigEntry(
             key=CONF_MSX_KIOSK_MODE,
             type=ConfigEntryType.STRING,
-            label="MSX Kiosk Mode",
+            label="MSX Kiosk Mode (experimental)",
             required=False,
             default_value=DEFAULT_MSX_KIOSK_MODE,
             options=[
@@ -159,28 +159,29 @@ async def get_config_entries(
                     MSX_KIOSK_MODE_DISABLED,
                 ),
                 ConfigValueOption(
-                    "Standard - fullscreen player with HTTP streaming",
+                    "Standard (experimental) - fullscreen player with HTTP streaming",
                     MSX_KIOSK_MODE_STANDARD,
                 ),
                 ConfigValueOption(
-                    "Sendspin - fullscreen player with synchronized audio",
+                    "Sendspin (experimental) - synchronized audio (Android/browser only)",
                     MSX_KIOSK_MODE_SENDSPIN,
                 ),
             ],
             description=(
-                "Kiosk mode shows only the player without library navigation. "
+                "EXPERIMENTAL: Kiosk mode shows only the player without library navigation. "
                 "'Standard' uses HTTP streaming with WebSocket sync. "
-                "'Sendspin' receives clock-synchronized audio from MA (no seek support)."
+                "'Sendspin' receives clock-synchronized audio from MA (Android/browser only, "
+                "does not work on Samsung Tizen or macOS MSX app)."
             ),
         ),
         ConfigEntry(
             key=CONF_MSX_KIOSK_CONTROLS,
             type=ConfigEntryType.BOOLEAN,
-            label="Show playback controls in Kiosk Mode",
+            label="Show playback controls in Kiosk Mode (experimental)",
             required=False,
             default_value=DEFAULT_MSX_KIOSK_CONTROLS,
             description=(
-                "Show play/pause/next/prev buttons on screen in kiosk mode. "
+                "EXPERIMENTAL: Show play/pause/next/prev buttons on screen in kiosk mode. "
                 "If disabled, control playback only from Music Assistant."
             ),
         ),

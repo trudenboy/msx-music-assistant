@@ -136,6 +136,12 @@ class MSXHTTPServer:
             "/msx/sendspin-plugin.html", self._serve_static("sendspin-plugin.html")
         )
         self.app.router.add_get(
+            "/msx/sendspin-standalone.html", self._serve_static("sendspin-standalone.html")
+        )
+        self.app.router.add_get(
+            "/msx/sendspin-bundle.js", self._serve_static("sendspin-bundle.js")
+        )
+        self.app.router.add_get(
             "/msx/kiosk-plugin.html", self._handle_kiosk_plugin_html
         )
         self.app.router.add_get("/msx/kiosk.html", self._handle_kiosk_html)
@@ -387,9 +393,15 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 "version": "1.0.6",
                 "parameter": f"menu:request:interaction:init@{prefix}/msx/plugin.html?v=8",
             }
+        elif kiosk_mode == MSX_KIOSK_MODE_SENDSPIN:
+            # Kiosk mode with Sendspin - synchronized audio via WebRTC
+            start_config = {
+                "name": "Music Assistant Kiosk",
+                "version": "1.0.6",
+                "parameter": f"menu:request:interaction:init@{prefix}/msx/plugin.html?v=8&kiosk=1&sendspin=1",
+            }
         else:
-            # Kiosk mode - use same plugin.html but with kiosk=1 parameter
-            # Plugin will return minimal menu and only handle WebSocket play commands
+            # Kiosk mode standard - regular HTTP streaming
             start_config = {
                 "name": "Music Assistant Kiosk",
                 "version": "1.0.6",
@@ -412,8 +424,11 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         path = STATIC_DIR / "plugin.html"
         content = path.read_text(encoding="utf-8")
 
+        # Check if sendspin is forced via URL param (for kiosk sendspin mode)
+        sendspin_forced = request.query.get("sendspin") == "1"
+        
         # Inject Sendspin configuration
-        sendspin_enabled = bool(
+        sendspin_enabled = sendspin_forced or bool(
             self.provider.config.get_value(CONF_SENDSPIN_ENABLED, DEFAULT_SENDSPIN_ENABLED)
         )
         host = request.host.split(":")[0]
@@ -590,7 +605,15 @@ small {{ color: #666; display: block; margin-top: 4px; }}
 
     async def _handle_kiosk_album(self, request: web.Request) -> web.Response:
         """Return fake album for kiosk mode - waiting for playback."""
-        # Fake album item - just a placeholder
+        device_id = request.query.get("device_id", "msx_kiosk")
+        host = request.host.split(":")[0]
+        prefix = f"http://{request.host}"
+        
+        # Check if sendspin mode
+        kiosk_mode = str(
+            self.provider.config.get_value(CONF_MSX_KIOSK_MODE, DEFAULT_MSX_KIOSK_MODE)
+        )
+        
         content = {
             "headline": "",
             "transparent": 1,
@@ -606,6 +629,17 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 "action": "info:Start playback from Music Assistant app"
             }]
         }
+        
+        # In sendspin mode, add extension to load sendspin plugin in background
+        if kiosk_mode == MSX_KIOSK_MODE_SENDSPIN:
+            sendspin_server = f"http://{host}:8927"
+            sendspin_url = (
+                f"{prefix}/msx/sendspin-plugin.html"
+                f"?server={quote(sendspin_server, safe='')}"
+                f"&player_id={quote(device_id, safe='')}"
+            )
+            content["extension"] = sendspin_url
+        
         return web.json_response(content)
 
     # --- MSX Content Pages (native MSX JSON) ---
