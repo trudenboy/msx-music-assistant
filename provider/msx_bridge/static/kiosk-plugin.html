@@ -632,13 +632,18 @@
             logger.debug("handleRequest: " + dataId);
             if (dataId === "init") {
                 // Return minimal menu structure for kiosk mode
-                // MSX requires at least one menu item
                 callback({
                     menu: [{
                         icon: "music-note",
                         label: "Now Playing",
-                        data: "info:Kiosk Mode Active"
+                        data: "request:interaction:kiosk"
                     }]
+                });
+            } else if (dataId === "kiosk") {
+                // Return empty content page
+                callback({
+                    headline: "Music Assistant Kiosk",
+                    items: []
                 });
             } else {
                 callback(null);
