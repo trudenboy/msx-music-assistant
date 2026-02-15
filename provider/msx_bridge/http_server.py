@@ -140,6 +140,7 @@ class MSXHTTPServer:
         )
         self.app.router.add_get("/msx/kiosk.html", self._handle_kiosk_html)
         self.app.router.add_get("/msx/kiosk-content.json", self._handle_kiosk_content)
+        self.app.router.add_get("/msx/kiosk-page.json", self._handle_kiosk_page)
 
         # MSX content pages (native MSX JSON navigation)
         self.app.router.add_get("/msx/menu.json", self._handle_msx_menu)
@@ -543,6 +544,20 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 "Expires": "0",
             },
         )
+
+    async def _handle_kiosk_page(self, request: web.Request) -> web.Response:
+        """Return simple kiosk content page."""
+        content = {
+            "headline": "Now Playing",
+            "items": [{
+                "type": "button",
+                "layout": "4,2,4,2",
+                "label": "Waiting for playback...",
+                "icon": "music-note",
+                "action": "info:Control playback from Music Assistant"
+            }]
+        }
+        return web.json_response(content)
 
     async def _handle_kiosk_content(self, request: web.Request) -> web.Response:
         """Return MSX content page with fullscreen iframe for kiosk mode."""
