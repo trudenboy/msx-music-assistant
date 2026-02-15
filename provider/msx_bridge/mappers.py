@@ -103,17 +103,9 @@ def _build_audio_action(
     player_id: str,
     track_uri: str,
     device_param: str = "",
-    sendspin_enabled: bool = False,  # noqa: ARG001 - reserved for future use
-    sendspin_server: str = "",  # noqa: ARG001 - reserved for future use
     from_playlist: bool = False,
 ) -> str:
-    """Build audio action URL for MSX playback.
-
-    Note: Sendspin integration is disabled for now. MSX uses standard HTTP streaming
-    with WebSocket push for play/pause/stop synchronization. The sendspin_enabled
-    and sendspin_server parameters are reserved for future use when MA supports
-    streaming audio to specific Sendspin player IDs.
-    """
+    """Build audio action URL for MSX playback."""
     # Standard HTTP streaming mode
     audio_url = f"{prefix}/msx/audio/{player_id}.mp3?uri={quote(track_uri, safe='')}"
     if from_playlist:
@@ -129,8 +121,6 @@ def map_track_to_msx(
     provider: MSXBridgeProvider,
     device_param: str = "",
     playlist_url: str | None = None,
-    sendspin_enabled: bool = False,
-    sendspin_server: str = "",
 ) -> MsxItem:
     """Map a MA Track to an MSX Item."""
     duration = getattr(track, "duration", 0) or 0
@@ -157,8 +147,6 @@ def map_track_to_msx(
             player_id=player_id,
             track_uri=track.uri,
             device_param=device_param,
-            sendspin_enabled=sendspin_enabled,
-            sendspin_server=sendspin_server,
         )
 
     return MsxItem(
@@ -179,8 +167,6 @@ def map_tracks_to_msx_playlist(
     player_id: str,
     provider: MSXBridgeProvider,
     device_param: str = "",
-    sendspin_enabled: bool = False,
-    sendspin_server: str = "",
 ) -> MsxContent:
     """Map a list of MA Track objects to an MSX Content page for playlist playback.
 
@@ -205,8 +191,6 @@ def map_tracks_to_msx_playlist(
             player_id=player_id,
             track_uri=track.uri,
             device_param=device_param,
-            sendspin_enabled=sendspin_enabled,
-            sendspin_server=sendspin_server,
             from_playlist=True,
         )
 

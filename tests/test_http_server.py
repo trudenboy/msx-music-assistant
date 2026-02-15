@@ -983,6 +983,27 @@ async def test_ws_unknown_message_type(provider: MSXBridgeProvider) -> None:
     provider.http_server._handle_ws_message("msx_test", '{"type": "unknown_cmd"}')  # type: ignore[attr-defined]
 
 
+# --- Removed kiosk/sendspin routes ---
+
+
+async def test_removed_kiosk_and_sendspin_routes_404(
+    http_client: TestClient[Any, Any],
+) -> None:
+    """Removed kiosk and sendspin routes should return 404."""
+    for path in [
+        "/msx/kiosk-plugin.html",
+        "/msx/kiosk.html",
+        "/msx/kiosk-content.json",
+        "/msx/kiosk-page.json",
+        "/msx/kiosk-album.json",
+        "/msx/sendspin-plugin.html",
+        "/msx/sendspin-standalone.html",
+        "/msx/sendspin-bundle.js",
+    ]:
+        resp = await http_client.get(path)
+        assert resp.status == 404, f"Expected 404 for {path}, got {resp.status}"
+
+
 class _AsyncCtx:
     """Async context manager helper for mocking session.get()."""
 
