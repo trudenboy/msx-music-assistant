@@ -11,7 +11,9 @@
 - **Браузинг библиотеки** — навигация по трекам альбомов, альбомам исполнителей, трекам плейлистов и результатам поиска
 - **Аудио воспроизведение** — стриминг через очередь MA с PCM→ffmpeg кодированием
 - **Браузерный веб-плеер** — лёгкий плеер для кухни, офиса, киосков и мобильного доступа (`http://<SERVER_IP>:8099/web/`)
-- **Группировка плееров** — синхронное управление воспроизведением на нескольких TV (экспериментально; без синхронизации аудиопотока, каждый TV получает свой поток)
+- **Группировка плееров** — синхронное управление воспроизведением на нескольких TV (экспериментально; настраиваемые режимы стриминга)
+- **Режимы стриминга для групп** — Independent (каждый TV получает свой ffmpeg) или Shared Buffer (один ffmpeg, меньше CPU)
+- **Удаление плееров** — возможность удалить MSX плеер из MA UI
 - **Нативные плейлисты MSX** — бесшовное воспроизведение альбомов/плейлистов с интеграцией очереди и навигацией пультом
 - **Динамическая регистрация** — TV регистрируются как MA плееры автоматически по device ID или IP
 - **Поддержка нескольких TV** — каждый TV получает уникальный плеер
@@ -101,7 +103,7 @@ cd ../ma-server && python -m music_assistant --log-level debug
 
 ## Конфигурация
 
-Провайдер предоставляет шесть настроек в MA UI:
+Провайдер предоставляет семь настроек в MA UI:
 
 | Параметр | По умолчанию | Описание |
 |----------|--------------|----------|
@@ -111,6 +113,7 @@ cd ../ma-server && python -m music_assistant --log-level debug
 | `show_stop_notification` | `false` | Показывать уведомление при остановке из MA |
 | `abort_stream_first` | `false` | Сначала прервать поток, потом отправить stop (может помочь на некоторых TV) |
 | `enable_player_grouping` | `true` | Разрешить группировку TV для синхронного воспроизведения (экспериментально) |
+| `group_stream_mode` | `independent` | Режим стриминга для групп: `independent` (каждый TV получает свой ffmpeg) или `shared` (один ffmpeg, меньше CPU) |
 
 ### Stop, Pause и Resume
 
@@ -133,6 +136,7 @@ cd ../ma-server && python -m music_assistant --log-level debug
 | GET | `/` | Статус дашборд (HTML) |
 | GET | `/msx/start.json` | MSX стартовая конфигурация |
 | GET | `/msx/plugin.html` | MSX interaction plugin |
+| GET | `/msx/sendspin-plugin.html` | Sendspin TVX Video Plugin (зарезервирован) |
 
 ### Контент
 
@@ -143,6 +147,7 @@ cd ../ma-server && python -m music_assistant --log-level debug
 | GET | `/msx/artists.json` | Список исполнителей |
 | GET | `/msx/playlists.json` | Список плейлистов |
 | GET | `/msx/tracks.json` | Список треков |
+| GET | `/msx/recently-played.json` | Недавно воспроизведённые треки |
 | GET | `/msx/search.json?q=...` | Результаты поиска |
 
 ### Управление воспроизведением
@@ -176,16 +181,20 @@ provider/msx_bridge/
 ├── provider.py        # MSXBridgeProvider — жизненный цикл, регистрация плееров
 ├── player.py          # MSXPlayer — Smart TV как MA плеер
 ├── http_server.py     # MSXHTTPServer — aiohttp маршруты
-├── constants.py       # Ключи конфигурации и значения по умолчанию
+├── constants.py       # Ключи конфигурации и значения по умолчанию (7 параметров)
 ├── mappers.py         # MSX JSON мапперы для контент-страниц
 ├── models.py          # Pydantic модели для MSX ответов
 ├── manifest.json      # Метаданные провайдера для MA
 └── static/
-    ├── web/           # Браузерный веб-плеер
-    │   ├── index.html # UI плеера
-    │   └── web.js     # Логика плеера
-    ├── plugin.html    # MSX interaction plugin
-    └── ...
+    ├── web/                    # Браузерный веб-плеер
+    │   ├── index.html          # UI плеера
+    │   └── web.js              # Логика плеера
+    ├── plugin.html             # MSX interaction plugin
+    ├── sendspin-plugin.html    # Sendspin TVX Video Plugin (зарезервирован)
+    ├── input.html              # MSX Input Plugin (поисковая клавиатура)
+    ├── input.js                # Логика Input Plugin
+    ├── tvx-plugin-module.min.js # TVX plugin module
+    └── tvx-plugin.min.js       # TVX plugin
 
 tests/                 # Unit и integration тесты
 scripts/               # Setup и dev скрипты
