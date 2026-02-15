@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sendspin Player Plugin</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style type="text/css">
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+        }
+        .sync-indicator {
+            position: fixed;
+            top: 8px;
+            right: 8px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-family: sans-serif;
+            font-size: 12px;
+            color: #fff;
+            background: rgba(76, 175, 80, 0.85);
+            z-index: 1000;
+            display: none;
+        }
+        .sync-indicator.connecting {
+            background: rgba(255, 152, 0, 0.85);
+        }
+        .sync-indicator.error {
+            background: rgba(244, 67, 54, 0.85);
+        }
+        .sync-indicator.visible {
+            display: block;
+        }
+    </style>
+    <script type="text/javascript" src="//msx.benzac.de/js/tvx-plugin.min.js"></script>
+</head>
+<body>
+<div id="sync-indicator" class="sync-indicator">SYNC</div>
+<script type="text/javascript">
+(function() {
+    "use strict";
+
+    // URL Parameters
+    var serverUrl = "";
+    var playerId = "";
+    var correctionMode = "sync";
+
+    // State
+    var sendspinPlayer = null;
+    var SendspinPlayerClass = null;
+    var sdkLoaded = false;
+    var sdkLoadError = null;
+    var state = 0; // TVXVideoState: 0=STOPPED, 1=PLAYING, 2=PAUSED
+    var position = 0;
+    var duration = 0;
+    var volume = 100;
+    var muted = false;
+    var speed = 1;
+    var isConnected = false;
+    var logger = null;
+
+    // DOM
+    var syncIndicator = null;
+
+    // Generate player ID if not provided
+    function generatePlayerId() {
+        var chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+        var id = "msx_sendspin_";
+        for (var i = 0; i < 8; i++) {
+            id += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return id;
+    }
+
+    // Update sync indicator
+    function updateSyncIndicator(status, text) {
+        if (!syncIndicator) return;
+        syncIndicator.className = "sync-indicator visible";
+        if (status === "connected") {
+            syncIndicator.className = "sync-indicator visible";
+            syncIndicator.textContent = text || "SYNC";
+        } else if (status === "connecting") {
+            syncIndicator.className = "sync-indicator visible connecting";
+            syncIndicator.textContent = text || "CONNECTING...";
+        } else if (status === "error") {
+            syncIndicator.className = "sync-indicator visible error";
+            syncIndicator.textContent = text || "ERROR";
+        } else {
+            syncIndicator.className = "sync-indicator";
+        }
+    }
+
+    // Load Sendspin SDK dynamically
+    function loadSendspinSDK(callback) {
+        if (sdkLoaded) {
+            callback(SendspinPlayerClass, null);
+            return;
+        }
+        if (sdkLoadError) {
+            callback(null, sdkLoadError);
+            return;
+        }
+
+        // Check if ES modules are supported
+        var supportsModules = false;
+        try {
+            new Function("import('')");
+            supportsModules = true;
+        } catch (e) {
+            supportsModules = false;
+        }
+
+        if (!supportsModules) {
+            sdkLoadError = "ES modules not supported on this device";
+            callback(null, sdkLoadError);
+            return;
+        }
+
+        // Create module script to load Sendspin SDK
+        var script = document.createElement("script");
+        script.type = "module";
+        script.textContent = [
+            "import { SendspinPlayer } from 'https://unpkg.com/@music-assistant/sendspin-js@latest/dist/index.js';",
+            "window.__SendspinPlayerClass = SendspinPlayer;",
+            "window.dispatchEvent(new CustomEvent('sendspin-sdk-loaded'));"
+        ].join("\n");
+
+        var loadTimeout = setTimeout(function() {
+            if (!sdkLoaded) {
+                sdkLoadError = "SDK load timeout";
+                callback(null, sdkLoadError);
+            }
+        }, 10000);
+
+        window.addEventListener("sendspin-sdk-loaded", function onLoaded() {
+            window.removeEventListener("sendspin-sdk-loaded", onLoaded);
+            clearTimeout(loadTimeout);
+            if (window.__SendspinPlayerClass) {
+                SendspinPlayerClass = window.__SendspinPlayerClass;
+                sdkLoaded = true;
+                callback(SendspinPlayerClass, null);
+            } else {
+                sdkLoadError = "SDK class not found";
+                callback(null, sdkLoadError);
+            }
+        });
+
+        script.onerror = function() {
+            clearTimeout(loadTimeout);
+            sdkLoadError = "Failed to load SDK script";
+            callback(null, sdkLoadError);
+        };
+
+        document.head.appendChild(script);
+    }
+
+    // Handle Sendspin state changes
+    function onSendspinStateChange(playerState) {
+        if (!sendspinPlayer) return;
+
+        // Update position/duration from track progress
+        if (sendspinPlayer.trackProgress) {
+            var progress = sendspinPlayer.trackProgress;
+            if (progress.positionMs != null) {
+                position = progress.positionMs / 1000;
+            }
+            if (progress.durationMs != null) {
+                duration = progress.durationMs / 1000;
+            }
+        }
+
+        // Update playing state
+        var wasPlaying = (state === 1);
+        var nowPlaying = sendspinPlayer.isPlaying;
+        if (nowPlaying && !wasPlaying) {
+            state = 1; // PLAYING
+            TVXVideoPlugin.setState(TVXVideoState.PLAYING);
+        } else if (!nowPlaying && wasPlaying) {
+            state = 2; // PAUSED
+            TVXVideoPlugin.setState(TVXVideoState.PAUSED);
+        }
+
+        // Update metadata in MSX player UI
+        if (playerState && playerState.serverState && playerState.serverState.metadata) {
+            var meta = playerState.serverState.metadata;
+            if (meta.title) {
+                TVXVideoPlugin.setupContentLabel(meta.title);
+            }
+            if (meta.artist) {
+                TVXVideoPlugin.setupExtensionLabel(meta.artist);
+            }
+            if (meta.artwork_url || meta.image_url) {
+                TVXVideoPlugin.setupInfoImage(meta.artwork_url || meta.image_url);
+            }
+        }
+
+        // Update sync indicator
+        if (sendspinPlayer.isClockSynced) {
+            updateSyncIndicator("connected", "SYNC");
+        } else if (isConnected) {
+            updateSyncIndicator("connecting", "SYNCING...");
+        }
+    }
+
+    // SendspinMSXPlayer - implements TVXVideoPluginPlayer interface
+    function SendspinMSXPlayer() {
+        var self = this;
+
+        this.init = function() {
+            syncIndicator = document.getElementById("sync-indicator");
+            logger = new TVXLogger();
+
+            // Parse URL parameters
+            serverUrl = TVXServices.urlParams.get("server", "");
+            playerId = TVXServices.urlParams.get("player_id", "");
+            correctionMode = TVXServices.urlParams.get("correction", "sync");
+
+            if (!playerId) {
+                playerId = generatePlayerId();
+            }
+
+            logger.debug("Sendspin init: server=" + serverUrl + ", player=" + playerId);
+
+            if (!serverUrl) {
+                TVXVideoPlugin.error("No Sendspin server URL provided");
+                return;
+            }
+
+            updateSyncIndicator("connecting", "LOADING SDK...");
+        };
+
+        this.ready = function() {
+            logger.debug("Sendspin ready, loading SDK...");
+
+            loadSendspinSDK(function(PlayerClass, error) {
+                if (error || !PlayerClass) {
+                    logger.error("Sendspin SDK load failed: " + (error || "unknown error"));
+                    updateSyncIndicator("error", "SDK ERROR");
+                    TVXVideoPlugin.error("Sendspin SDK not available: " + (error || "unknown error"));
+                    // Eject after short delay so user sees error
+                    setTimeout(function() {
+                        TVXVideoPlugin.executeAction("player:eject");
+                    }, 3000);
+                    return;
+                }
+
+                logger.debug("Sendspin SDK loaded, creating player...");
+                updateSyncIndicator("connecting", "CONNECTING...");
+
+                try {
+                    sendspinPlayer = new PlayerClass({
+                        playerId: playerId,
+                        baseUrl: serverUrl,
+                        clientName: "MSX Sendspin Plugin",
+                        correctionMode: correctionMode,
+                        onStateChange: onSendspinStateChange
+                    });
+
+                    sendspinPlayer.connect()
+                        .then(function() {
+                            logger.debug("Sendspin connected");
+                            isConnected = true;
+                            updateSyncIndicator("connected", "SYNC");
+                            TVXVideoPlugin.startPlayback();
+                        })
+                        .catch(function(err) {
+                            logger.error("Sendspin connection failed: " + err.message);
+                            updateSyncIndicator("error", "CONNECT FAILED");
+                            TVXVideoPlugin.error("Sendspin connection failed: " + err.message);
+                            setTimeout(function() {
+                                TVXVideoPlugin.executeAction("player:eject");
+                            }, 3000);
+                        });
+                } catch (e) {
+                    logger.error("Sendspin player creation failed: " + e.message);
+                    updateSyncIndicator("error", "INIT ERROR");
+                    TVXVideoPlugin.error("Sendspin init failed: " + e.message);
+                    setTimeout(function() {
+                        TVXVideoPlugin.executeAction("player:eject");
+                    }, 3000);
+                }
+            });
+        };
+
+        this.dispose = function() {
+            logger.debug("Sendspin dispose");
+            if (sendspinPlayer) {
+                try {
+                    sendspinPlayer.disconnect();
+                } catch (e) {
+                    logger.warn("Disconnect error: " + e.message);
+                }
+                sendspinPlayer = null;
+            }
+            isConnected = false;
+            updateSyncIndicator("hidden");
+        };
+
+        this.getState = function() {
+            return state;
+        };
+
+        this.play = function() {
+            logger.debug("Sendspin play");
+            if (sendspinPlayer && isConnected) {
+                try {
+                    sendspinPlayer.sendCommand("play");
+                    state = 1;
+                } catch (e) {
+                    logger.warn("Play command failed: " + e.message);
+                }
+            }
+        };
+
+        this.pause = function() {
+            logger.debug("Sendspin pause");
+            if (sendspinPlayer && isConnected) {
+                try {
+                    sendspinPlayer.sendCommand("pause");
+                    state = 2;
+                } catch (e) {
+                    logger.warn("Pause command failed: " + e.message);
+                }
+            }
+        };
+
+        this.stop = function() {
+            logger.debug("Sendspin stop");
+            if (sendspinPlayer && isConnected) {
+                try {
+                    sendspinPlayer.sendCommand("stop");
+                    state = 0;
+                } catch (e) {
+                    logger.warn("Stop command failed: " + e.message);
+                }
+            }
+        };
+
+        this.getDuration = function() {
+            return duration;
+        };
+
+        this.getPosition = function() {
+            return position;
+        };
+
+        this.setPosition = function(pos) {
+            // Seek not supported by Sendspin protocol
+            logger.debug("Sendspin setPosition ignored (not supported): " + pos);
+            if (pos >= duration && duration > 0) {
+                TVXVideoPlugin.stopPlayback();
+            }
+        };
+
+        this.setVolume = function(vol) {
+            logger.debug("Sendspin setVolume: " + vol);
+            volume = vol;
+            if (sendspinPlayer && isConnected) {
+                try {
+                    sendspinPlayer.setVolume(vol / 100);
+                } catch (e) {
+                    logger.warn("setVolume failed: " + e.message);
+                }
+            }
+        };
+
+        this.getVolume = function() {
+            return volume;
+        };
+
+        this.setMuted = function(m) {
+            logger.debug("Sendspin setMuted: " + m);
+            muted = m;
+            if (sendspinPlayer && isConnected) {
+                try {
+                    sendspinPlayer.setMuted(m);
+                } catch (e) {
+                    logger.warn("setMuted failed: " + e.message);
+                }
+            }
+        };
+
+        this.isMuted = function() {
+            return muted;
+        };
+
+        this.getSpeed = function() {
+            return speed;
+        };
+
+        this.setSpeed = function(s) {
+            // Speed control not supported by Sendspin
+            logger.debug("Sendspin setSpeed ignored (not supported): " + s);
+        };
+
+        this.setSize = function(width, height) {
+            logger.debug("Sendspin setSize: " + width + "x" + height);
+        };
+
+        this.getUpdateData = function() {
+            // Update position from Sendspin player if available
+            if (sendspinPlayer && sendspinPlayer.trackProgress) {
+                var progress = sendspinPlayer.trackProgress;
+                if (progress.positionMs != null) {
+                    position = progress.positionMs / 1000;
+                }
+                if (progress.durationMs != null) {
+                    duration = progress.durationMs / 1000;
+                }
+            }
+            return {
+                position: position,
+                duration: duration,
+                speed: speed
+            };
+        };
+
+        this.handleEvent = function(data) {
+            if (data.event && data.event.indexOf("video:") !== 0) {
+                logger.debug("Sendspin handleEvent: " + TVXTools.serialize(data));
+            }
+            // Handle video:load events for metadata updates
+            if (data.event === "video:load" && data.info) {
+                if (data.info.title) {
+                    TVXVideoPlugin.setupContentLabel(data.info.title);
+                }
+                if (data.info.description) {
+                    TVXVideoPlugin.setupExtensionLabel(data.info.description);
+                }
+                if (data.info.image) {
+                    TVXVideoPlugin.setupInfoImage(data.info.image);
+                }
+            }
+        };
+
+        this.handleData = function(data) {
+            logger.debug("Sendspin handleData: " + TVXTools.serialize(data));
+        };
+
+        this.handleRequest = function(dataId, data, callback) {
+            logger.debug("Sendspin handleRequest: " + dataId);
+            callback(null);
+        };
+
+        this.onError = function(message, error) {
+            logger.error("Sendspin error: " + message + " - " + error);
+            updateSyncIndicator("error", "ERROR");
+        };
+    }
+
+    // Initialize plugin
+    TVXPluginTools.onReady(function() {
+        TVXVideoPlugin.setupPlayer(new SendspinMSXPlayer());
+        TVXVideoPlugin.init();
+    });
+})();
+</script>
+</body>
+</html>

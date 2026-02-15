@@ -11,6 +11,10 @@
     var WS_PROTOCOL = window.location.protocol === "https:" ? "wss:" : "ws:";
     var WS_URL = WS_PROTOCOL + "//" + window.location.host + "/ws";
 
+    // Sendspin configuration (injected by server)
+    var SENDSPIN_ENABLED = false;
+    var SENDSPIN_SERVER = "";
+
     function addDeviceParam(url, deviceId) {
         if (!deviceId) return url;
         var sep = url.indexOf("?") >= 0 ? "&" : "?";
@@ -120,8 +124,6 @@
                     resumedByServer = true;
                     tvx.InteractionPlugin.executeAction("player:play");
                 } else if (msg.type === "play" && msg.path && typeof tvx.InteractionPlugin.executeAction === "function") {
-                    // Force .mp3 extension for better compatibility with TV players
-                    var audioUrl = BRIDGE + msg.path + ".mp3";
                     var playerLabel = msg.title || "Music Assistant";
                     var labelParts = [];
                     if (msg.artist) labelParts.push(msg.artist);
@@ -135,7 +137,21 @@
                     if (msg.next_action) data.nextAction = resolveAction(msg.next_action);
                     if (msg.prev_action) data.prevAction = resolveAction(msg.prev_action);
                     startPositionTimer(0);
-                    tvx.InteractionPlugin.executeAction("audio:" + audioUrl, data);
+
+                    // Choose audio action based on Sendspin mode
+                    var audioAction;
+                    if (SENDSPIN_ENABLED && SENDSPIN_SERVER) {
+                        // Sendspin plugin mode: clock-synchronized audio
+                        var pluginUrl = BRIDGE + "/msx/sendspin-plugin.html" +
+                            "?server=" + encodeURIComponent(SENDSPIN_SERVER) +
+                            "&player_id=" + encodeURIComponent(deviceId || "msx_default");
+                        audioAction = "audio:plugin:" + pluginUrl;
+                    } else {
+                        // Standard HTTP streaming mode
+                        var audioUrl = BRIDGE + msg.path + ".mp3";
+                        audioAction = "audio:" + audioUrl;
+                    }
+                    tvx.InteractionPlugin.executeAction(audioAction, data);
                 } else if (msg.type === "playlist" && msg.url && typeof tvx.InteractionPlugin.executeAction === "function") {
                     var playlistUrl = BRIDGE + addDeviceParam(msg.url, deviceId);
                     startPositionTimer(0);

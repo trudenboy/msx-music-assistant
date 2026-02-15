@@ -98,6 +98,30 @@ def map_playlist_to_msx(
     )
 
 
+def _build_audio_action(
+    prefix: str,
+    player_id: str,
+    track_uri: str,
+    device_param: str = "",
+    sendspin_enabled: bool = False,  # noqa: ARG001 - reserved for future use
+    sendspin_server: str = "",  # noqa: ARG001 - reserved for future use
+    from_playlist: bool = False,
+) -> str:
+    """Build audio action URL for MSX playback.
+
+    Note: Sendspin integration is disabled for now. MSX uses standard HTTP streaming
+    with WebSocket push for play/pause/stop synchronization. The sendspin_enabled
+    and sendspin_server parameters are reserved for future use when MA supports
+    streaming audio to specific Sendspin player IDs.
+    """
+    # Standard HTTP streaming mode
+    audio_url = f"{prefix}/msx/audio/{player_id}.mp3?uri={quote(track_uri, safe='')}"
+    if from_playlist:
+        audio_url += "&from_playlist=1"
+    audio_url = append_device_param(audio_url, device_param)
+    return f"audio:{audio_url}"
+
+
 def map_track_to_msx(
     track: Any,
     prefix: str,
@@ -105,6 +129,8 @@ def map_track_to_msx(
     provider: MSXBridgeProvider,
     device_param: str = "",
     playlist_url: str | None = None,
+    sendspin_enabled: bool = False,
+    sendspin_server: str = "",
 ) -> MsxItem:
     """Map a MA Track to an MSX Item."""
     duration = getattr(track, "duration", 0) or 0
@@ -126,10 +152,14 @@ def map_track_to_msx(
         # Items are rotated so the desired track is at index 0.
         action = f"playlist:{playlist_url}"
     else:
-        audio_url = (
-            f"{prefix}/msx/audio/{player_id}.mp3?uri={quote(track.uri, safe='')}"
+        action = _build_audio_action(
+            prefix=prefix,
+            player_id=player_id,
+            track_uri=track.uri,
+            device_param=device_param,
+            sendspin_enabled=sendspin_enabled,
+            sendspin_server=sendspin_server,
         )
-        action = f"audio:{append_device_param(audio_url, device_param)}"
 
     return MsxItem(
         title_header="{txt:msx-white:" + track.name + "}",
@@ -149,6 +179,8 @@ def map_tracks_to_msx_playlist(
     player_id: str,
     provider: MSXBridgeProvider,
     device_param: str = "",
+    sendspin_enabled: bool = False,
+    sendspin_server: str = "",
 ) -> MsxContent:
     """Map a list of MA Track objects to an MSX Content page for playlist playback.
 
@@ -168,11 +200,15 @@ def map_tracks_to_msx_playlist(
         )
         image_url = get_image_url(track, provider)
 
-        encoded_uri = quote(track.uri, safe="")
-        audio_url = (
-            f"{prefix}/msx/audio/{player_id}.mp3?uri={encoded_uri}&from_playlist=1"
+        action = _build_audio_action(
+            prefix=prefix,
+            player_id=player_id,
+            track_uri=track.uri,
+            device_param=device_param,
+            sendspin_enabled=sendspin_enabled,
+            sendspin_server=sendspin_server,
+            from_playlist=True,
         )
-        audio_url = append_device_param(audio_url, device_param)
 
         msx_items.append(
             MsxItem(
@@ -182,7 +218,7 @@ def map_tracks_to_msx_playlist(
                 image=image_url,
                 background=image_url,
                 duration=duration,
-                action=f"audio:{audio_url}",
+                action=action,
             )
         )
 

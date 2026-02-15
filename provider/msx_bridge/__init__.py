@@ -20,6 +20,7 @@ from .constants import (
     CONF_HTTP_PORT,
     CONF_OUTPUT_FORMAT,
     CONF_PLAYER_IDLE_TIMEOUT,
+    CONF_SENDSPIN_ENABLED,
     CONF_SHOW_STOP_NOTIFICATION,
     DEFAULT_ABORT_STREAM_FIRST,
     DEFAULT_ENABLE_GROUPING,
@@ -27,6 +28,7 @@ from .constants import (
     DEFAULT_HTTP_PORT,
     DEFAULT_OUTPUT_FORMAT,
     DEFAULT_PLAYER_IDLE_TIMEOUT,
+    DEFAULT_SENDSPIN_ENABLED,
     DEFAULT_SHOW_STOP_NOTIFICATION,
     GROUP_STREAM_MODE_INDEPENDENT,
     GROUP_STREAM_MODE_SHARED,
@@ -138,4 +140,17 @@ async def get_config_entries(
                 "'Shared Buffer' uses one ffmpeg process for all group members (less CPU, better sync)."
             ),
         ),
+        # Sendspin integration is disabled for now - MSX uses HTTP streaming with WS sync
+        # ConfigEntry(
+        #     key=CONF_SENDSPIN_ENABLED,
+        #     type=ConfigEntryType.BOOLEAN,
+        #     label="Enable Sendspin synchronized playback",
+        #     required=False,
+        #     default_value=DEFAULT_SENDSPIN_ENABLED,
+        #     description=(
+        #         "Use Sendspin protocol for clock-synchronized audio playback across "
+        #         "multiple TVs. Requires Music Assistant with Sendspin support. "
+        #         "Note: Seek is not supported in this mode."
+        #     ),
+        # ),
     )

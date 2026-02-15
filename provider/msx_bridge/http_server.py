@@ -18,7 +18,9 @@ from music_assistant_models.media_items import AudioFormat
 from music_assistant.helpers.ffmpeg import get_ffmpeg_stream
 
 from .constants import (
+    CONF_SENDSPIN_ENABLED,
     CONF_SHOW_STOP_NOTIFICATION,
+    DEFAULT_SENDSPIN_ENABLED,
     DEFAULT_SHOW_STOP_NOTIFICATION,
     MSX_PLAYER_ID_PREFIX,
     PLAYER_ID_SANITIZE_RE,
@@ -97,6 +99,17 @@ class MSXHTTPServer:
         self._active_stream_transports: dict[str, set[Any]] = {}
         self._setup_routes()
 
+    def _get_sendspin_settings(self, request: web.Request) -> tuple[bool, str]:
+        """Get Sendspin enabled flag and server URL for the request."""
+        sendspin_enabled = bool(
+            self.provider.config.get_value(CONF_SENDSPIN_ENABLED, DEFAULT_SENDSPIN_ENABLED)
+        )
+        if not sendspin_enabled:
+            return False, ""
+        host = request.host.split(":")[0]
+        sendspin_server = f"http://{host}:8095"
+        return sendspin_enabled, sendspin_server
+
     def _setup_routes(self) -> None:
         """Register all HTTP routes."""
         # MSX bootstrap
@@ -112,6 +125,9 @@ class MSXHTTPServer:
         )
         self.app.router.add_get("/msx/input.html", self._handle_msx_input_html)
         self.app.router.add_get("/msx/input.js", self._serve_static("input.js"))
+        self.app.router.add_get(
+            "/msx/sendspin-plugin.html", self._serve_static("sendspin-plugin.html")
+        )
 
         # MSX content pages (native MSX JSON navigation)
         self.app.router.add_get("/msx/menu.json", self._handle_msx_menu)
@@ -357,13 +373,37 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         return handler
 
     async def _handle_msx_plugin_html(self, request: web.Request) -> web.Response:
-        """Serve plugin.html with no-cache so MSX always gets latest menu order."""
+        """Serve plugin.html with Sendspin settings injected."""
         path = STATIC_DIR / "plugin.html"
-        response = cast("web.Response", web.FileResponse(path))
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
-        return response
+        content = path.read_text(encoding="utf-8")
+
+        # Inject Sendspin configuration
+        sendspin_enabled = bool(
+            self.provider.config.get_value(CONF_SENDSPIN_ENABLED, DEFAULT_SENDSPIN_ENABLED)
+        )
+        host = request.host.split(":")[0]
+        # Default MA Sendspin server URL (same host, port 8095)
+        sendspin_server = f"http://{host}:8095"
+
+        # Replace placeholders in plugin.html
+        content = content.replace(
+            "var SENDSPIN_ENABLED = false;",
+            f"var SENDSPIN_ENABLED = {str(sendspin_enabled).lower()};",
+        )
+        content = content.replace(
+            'var SENDSPIN_SERVER = "";',
+            f'var SENDSPIN_SERVER = "{sendspin_server}";',
+        )
+
+        return web.Response(
+            text=content,
+            content_type="text/html",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
 
     async def _handle_msx_input_html(self, request: web.Request) -> web.FileResponse:
         """Serve input.html and ensure player is registered when Search is opened."""
@@ -501,6 +541,7 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         tracks = await self.provider.mass.music.tracks.library_items(
             limit=limit, offset=offset
         )
+        sendspin_enabled, sendspin_server = self._get_sendspin_settings(request)
 
         playlist_base = (
             f"{prefix}/msx/playlist/tracks.json?limit={limit}&offset={offset}"
@@ -514,6 +555,8 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 self.provider,
                 device_param,
                 playlist_url=f"{playlist_base}&start={idx}",
+                sendspin_enabled=sendspin_enabled,
+                sendspin_server=sendspin_server,
             )
             for idx, t in enumerate(tracks)
         ]
@@ -536,6 +579,7 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         tracks = await self.provider.mass.music.tracks.library_items(
             limit=50, order_by="last_played"
         )
+        sendspin_enabled, sendspin_server = self._get_sendspin_settings(request)
         playlist_base = f"{prefix}/msx/playlist/recently-played.json"
         playlist_base = append_device_param(playlist_base, device_param)
         items = [
@@ -546,6 +590,8 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 self.provider,
                 device_param,
                 playlist_url=f"{playlist_base}{'&' if '?' in playlist_base else '?'}start={idx}",
+                sendspin_enabled=sendspin_enabled,
+                sendspin_server=sendspin_server,
             )
             for idx, t in enumerate(tracks)
         ]
@@ -613,8 +659,9 @@ small {{ color: #666; display: block; margin-top: 4px; }}
             )
 
         limit = _int_param(request.query, "limit", 20)
+        sendspin_enabled, sendspin_server = self._get_sendspin_settings(request)
         items = await self._build_search_items(
-            query, limit, player_id, device_param, prefix
+            query, limit, player_id, device_param, prefix, sendspin_enabled, sendspin_server
         )
 
         content = MsxContent(
@@ -643,8 +690,9 @@ small {{ color: #666; display: block; margin-top: 4px; }}
             )
 
         limit = _int_param(request.query, "limit", 20)
+        sendspin_enabled, sendspin_server = self._get_sendspin_settings(request)
         items = await self._build_search_items(
-            query, limit, player_id, device_param, prefix
+            query, limit, player_id, device_param, prefix, sendspin_enabled, sendspin_server
         )
 
         content = MsxContent(
@@ -665,6 +713,8 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         player_id: str,
         device_param: str,
         prefix: str,
+        sendspin_enabled: bool = False,
+        sendspin_server: str = "",
     ) -> list[MsxItem]:
         """Build MSX items from search results (shared by search handlers)."""
         results = await self.provider.mass.music.search(query, limit=limit)
@@ -689,6 +739,8 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 self.provider,
                 device_param,
                 playlist_url=f"{playlist_base}&start={idx}",
+                sendspin_enabled=sendspin_enabled,
+                sendspin_server=sendspin_server,
             )
             item.label = f"Track — {getattr(track, 'artist_str', '')}"
             item.icon = "msx-white-soft:audiotrack"
@@ -703,6 +755,7 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         prefix = f"http://{request.host}"
         item_id = request.match_info["item_id"]
         provider = request.query.get("provider", "library")
+        sendspin_enabled, sendspin_server = self._get_sendspin_settings(request)
         try:
             tracks = _sort_album_tracks(
                 await self.provider.mass.music.albums.tracks(item_id, provider)
@@ -722,6 +775,8 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 self.provider,
                 device_param,
                 playlist_url=f"{playlist_base}&start={idx}",
+                sendspin_enabled=sendspin_enabled,
+                sendspin_server=sendspin_server,
             )
             for idx, t in enumerate(tracks)
         ]
@@ -768,6 +823,7 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         player_id, device_param, _ = await self._ensure_player_for_request(request)
         prefix = f"http://{request.host}"
         item_id = request.match_info["item_id"]
+        sendspin_enabled, sendspin_server = self._get_sendspin_settings(request)
         try:
             tracks = [
                 t
@@ -788,6 +844,8 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 self.provider,
                 device_param,
                 playlist_url=f"{playlist_base}{'&' if '?' in playlist_base else '?'}start={idx}",
+                sendspin_enabled=sendspin_enabled,
+                sendspin_server=sendspin_server,
             )
             for idx, t in enumerate(tracks)
         ]
@@ -812,6 +870,7 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         item_id = request.match_info["item_id"]
         provider_name = request.query.get("provider", "library")
         start = _int_param(request.query, "start", 0)
+        sendspin_enabled, sendspin_server = self._get_sendspin_settings(request)
         try:
             tracks = _sort_album_tracks(
                 await self.provider.mass.music.albums.tracks(item_id, provider_name)
@@ -820,7 +879,8 @@ small {{ color: #666; display: block; margin-top: 4px; }}
             logger.exception("Failed to fetch tracks for album playlist %s", item_id)
             tracks = []
         playlist = map_tracks_to_msx_playlist(
-            tracks, start, prefix, player_id, self.provider, device_param
+            tracks, start, prefix, player_id, self.provider, device_param,
+            sendspin_enabled, sendspin_server
         )
         return web.json_response(playlist.model_dump(by_alias=True, exclude_none=True))
 
@@ -830,6 +890,7 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         prefix = f"http://{request.host}"
         item_id = request.match_info["item_id"]
         start = _int_param(request.query, "start", 0)
+        sendspin_enabled, sendspin_server = self._get_sendspin_settings(request)
         try:
             tracks = [
                 t
@@ -841,7 +902,8 @@ small {{ color: #666; display: block; margin-top: 4px; }}
             logger.exception("Failed to fetch tracks for playlist playlist %s", item_id)
             tracks = []
         playlist = map_tracks_to_msx_playlist(
-            tracks, start, prefix, player_id, self.provider, device_param
+            tracks, start, prefix, player_id, self.provider, device_param,
+            sendspin_enabled, sendspin_server
         )
         return web.json_response(playlist.model_dump(by_alias=True, exclude_none=True))
 
@@ -852,11 +914,13 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         limit = _int_param(request.query, "limit", 50)
         offset = _int_param(request.query, "offset", 0)
         start = _int_param(request.query, "start", 0)
+        sendspin_enabled, sendspin_server = self._get_sendspin_settings(request)
         tracks = await self.provider.mass.music.tracks.library_items(
             limit=limit, offset=offset
         )
         playlist = map_tracks_to_msx_playlist(
-            list(tracks), start, prefix, player_id, self.provider, device_param
+            list(tracks), start, prefix, player_id, self.provider, device_param,
+            sendspin_enabled, sendspin_server
         )
         return web.json_response(playlist.model_dump(by_alias=True, exclude_none=True))
 
@@ -867,11 +931,13 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         player_id, device_param, _ = await self._ensure_player_for_request(request)
         prefix = f"http://{request.host}"
         start = _int_param(request.query, "start", 0)
+        sendspin_enabled, sendspin_server = self._get_sendspin_settings(request)
         tracks = await self.provider.mass.music.tracks.library_items(
             limit=50, order_by="last_played"
         )
         playlist = map_tracks_to_msx_playlist(
-            list(tracks), start, prefix, player_id, self.provider, device_param
+            list(tracks), start, prefix, player_id, self.provider, device_param,
+            sendspin_enabled, sendspin_server
         )
         return web.json_response(playlist.model_dump(by_alias=True, exclude_none=True))
 
@@ -886,9 +952,11 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 MsxContent(items=[]).model_dump(by_alias=True, exclude_none=True)
             )
         limit = _int_param(request.query, "limit", 20)
+        sendspin_enabled, sendspin_server = self._get_sendspin_settings(request)
         results = await self.provider.mass.music.search(query, limit=limit)
         playlist = map_tracks_to_msx_playlist(
-            list(results.tracks), start, prefix, player_id, self.provider, device_param
+            list(results.tracks), start, prefix, player_id, self.provider, device_param,
+            sendspin_enabled, sendspin_server
         )
         return web.json_response(playlist.model_dump(by_alias=True, exclude_none=True))
 
@@ -924,8 +992,10 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 )
             )
 
+        sendspin_enabled, sendspin_server = self._get_sendspin_settings(request)
         playlist = map_tracks_to_msx_playlist(
-            tracks, start, prefix, player_id, self.provider, device_param
+            tracks, start, prefix, player_id, self.provider, device_param,
+            sendspin_enabled, sendspin_server
         )
         return web.json_response(playlist.model_dump(by_alias=True, exclude_none=True))
 
