@@ -634,12 +634,15 @@
                 // Return content page for kiosk mode (fullscreen player)
                 callback({
                     type: "pages",
-                    headline: "Music Assistant",
+                    headline: "",
+                    header: { visible: false },
                     pages: [{
                         items: [{
-                            type: "space",
+                            type: "default",
                             layout: "0,0,12,6",
-                            offset: "0,0,0,0"
+                            label: "",
+                            enable: false,
+                            focus: false
                         }]
                     }]
                 });
