@@ -445,11 +445,12 @@
 
     // --- Standard Mode (WebSocket) ---
     function connectWS() {
-        if (KIOSK_MODE !== "standard") return;
-
-        var wsUrl = (location.protocol === "https:" ? "wss:" : "ws:") +
-                    "//" + location.host + "/ws" +
-                    "?device_id=" + encodeURIComponent(deviceId) + "&source=msx_kiosk";
+        // Connect to MA WebSocket for push notifications
+        var wsProto = BRIDGE_URL.indexOf("https:") === 0 ? "wss:" : "ws:";
+        var wsHost = BRIDGE_URL.replace(/^https?:/, "");
+        var wsUrl = wsProto + wsHost + "/ws?device_id=" + encodeURIComponent(deviceId) + "&source=msx_kiosk";
+        
+        if (logger) logger.debug("Connecting WS: " + wsUrl);
 
         ws = new WebSocket(wsUrl);
         var thisWs = ws;
@@ -485,40 +486,39 @@
     }
 
     function handleWSMessage(msg) {
-        switch (msg.type) {
-            case "play":
-                isPlaying = true;
-                updateTrackInfo({
-                    title: msg.title || "",
-                    artist: msg.artist || "",
-                    image: msg.image_url || "",
-                    duration: msg.duration || 0
-                });
-                break;
-            case "stop":
-                isPlaying = false;
-                position = 0;
-                updateTrackInfo({ title: "Waiting for playback...", artist: "", image: "", duration: 0 });
-                break;
-            case "pause":
-                isPlaying = false;
-                break;
-            case "resume":
-                isPlaying = true;
-                break;
-            case "position":
-                position = msg.position || 0;
-                break;
-            case "metadata":
-                updateTrackInfo({
-                    title: msg.title || currentTrack.title,
-                    artist: msg.artist || currentTrack.artist,
-                    image: msg.image_url || currentTrack.image,
-                    duration: msg.duration || currentTrack.duration
-                });
-                break;
+        if (logger) logger.debug("WS message: " + msg.type);
+        
+        if (msg.type === "stop") {
+            TVXInteractionPlugin.executeAction("[player:eject|player:hide]");
+        } else if (msg.type === "pause") {
+            TVXInteractionPlugin.executeAction("player:pause");
+        } else if (msg.type === "resume") {
+            TVXInteractionPlugin.executeAction("player:play");
+        } else if (msg.type === "play" && msg.path) {
+            // Build player data like plugin.html does
+            var playerLabel = msg.title || "Music Assistant";
+            var labelParts = [];
+            if (msg.artist) labelParts.push(msg.artist);
+            if (msg.duration) labelParts.push(fmtDur(msg.duration));
+            var label = labelParts.join(" · ") || "";
+            
+            var data = { playerLabel: playerLabel };
+            if (label) data.label = label;
+            if (msg.image_url) data.background = msg.image_url;
+            if (msg.duration > 0) data.duration = msg.duration;
+            
+            // Build audio URL
+            var audioUrl = BRIDGE_URL + msg.path + ".mp3";
+            var audioAction = "audio:" + audioUrl;
+            
+            if (logger) logger.debug("Playing: " + audioAction);
+            TVXInteractionPlugin.executeAction(audioAction, data);
+        } else if (msg.type === "playlist" && msg.url) {
+            var playlistUrl = BRIDGE_URL + msg.url;
+            TVXInteractionPlugin.executeAction("playlist:" + playlistUrl);
+        } else if (msg.type === "goto_index" && msg.index != null) {
+            TVXInteractionPlugin.executeAction("player:goto:index:" + msg.index);
         }
-        updateUI();
     }
 
     function sendWSCommand(type, data) {
@@ -599,25 +599,10 @@
         };
 
         this.ready = function() {
-            logger.debug("Kiosk ready, mode: " + KIOSK_MODE);
-
-            if (KIOSK_MODE === "sendspin") {
-                initSendspin();
-            } else {
-                connectWS();
-            }
-
-            // Start progress update interval for Sendspin mode
-            if (KIOSK_MODE === "sendspin") {
-                setInterval(function() {
-                    if (sendspinPlayer && sendspinPlayer.trackProgress) {
-                        var progress = sendspinPlayer.trackProgress;
-                        position = progress.positionMs / 1000;
-                        duration = progress.durationMs / 1000;
-                        updateUI();
-                    }
-                }, 500);
-            }
+            logger.debug("Kiosk ready, mode: " + KIOSK_MODE + ", bridge: " + BRIDGE_URL);
+            
+            // Always connect WebSocket for receiving play commands from MA
+            connectWS();
         };
 
         this.handleEvent = function(data) {
@@ -635,17 +620,28 @@
             if (logger) logger.debug("handleRequest: " + dataId);
             
             if (dataId === "init") {
-                // Return content object for kiosk mode (not menu!)
-                // This is loaded via content:request:interaction:init@...
+                // Get kiosk HTML URL from BRIDGE_URL
+                var kioskUrl = BRIDGE_URL + "/msx/kiosk.html" +
+                    "?mode=" + encodeURIComponent(KIOSK_MODE) +
+                    "&controls=" + SHOW_CONTROLS +
+                    "&sendspin_server=" + encodeURIComponent(SENDSPIN_SERVER) +
+                    "&bridge=" + encodeURIComponent(BRIDGE_URL);
+                
+                if (logger) logger.debug("Kiosk URL: " + kioskUrl);
+                
+                // Return simple content page for kiosk mode
+                // The actual player will be shown when MA sends play command via WebSocket
                 callback({
-                    headline: "Now Playing",
+                    cache: false,
+                    headline: "Music Assistant",
                     background: "black",
                     items: [{
                         type: "button",
                         layout: "4,2,4,2",
-                        label: "Waiting for playback...",
                         icon: "music-note",
-                        action: "info:Control playback from Music Assistant"
+                        iconSize: "large",
+                        label: "Waiting for playback...",
+                        action: "info:Start playback from Music Assistant app"
                     }]
                 });
             } else {
