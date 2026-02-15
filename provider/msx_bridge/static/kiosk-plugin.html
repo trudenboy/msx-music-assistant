@@ -631,19 +631,17 @@
         this.handleRequest = function(dataId, data, callback) {
             logger.debug("handleRequest: " + dataId);
             if (dataId === "init") {
-                // Return minimal menu structure for kiosk mode
+                // Return content page for kiosk mode (fullscreen player)
                 callback({
-                    menu: [{
-                        icon: "music-note",
-                        label: "Now Playing",
-                        data: "request:interaction:kiosk"
+                    type: "pages",
+                    headline: "Music Assistant",
+                    pages: [{
+                        items: [{
+                            type: "space",
+                            layout: "0,0,12,6",
+                            offset: "0,0,0,0"
+                        }]
                     }]
-                });
-            } else if (dataId === "kiosk") {
-                // Return empty content page
-                callback({
-                    headline: "Music Assistant Kiosk",
-                    items: []
                 });
             } else {
                 callback(null);

@@ -384,7 +384,7 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 "parameter": f"menu:request:interaction:init@{prefix}/msx/plugin.html?v=8",
             }
         else:
-            # Kiosk mode - fullscreen player only
+            # Kiosk mode - fullscreen player via content page
             hostname = host.split(":")[0]
             sendspin_server = f"http://{hostname}:8927"
             kiosk_params = (
@@ -393,10 +393,11 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 f"&sendspin_server={quote(sendspin_server, safe='')}"
                 f"&bridge={quote(prefix, safe='')}"
             )
+            # Use content: instead of menu: to load kiosk page directly
             start_config = {
                 "name": "Music Assistant Kiosk",
                 "version": "1.0.6",
-                "parameter": f"menu:request:interaction:init@{prefix}/msx/kiosk-plugin.html?{kiosk_params}",
+                "parameter": f"content:request:interaction:init@{prefix}/msx/kiosk-plugin.html?{kiosk_params}",
             }
 
         return web.json_response(start_config)
