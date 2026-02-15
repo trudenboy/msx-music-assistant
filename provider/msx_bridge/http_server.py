@@ -139,6 +139,7 @@ class MSXHTTPServer:
             "/msx/kiosk-plugin.html", self._handle_kiosk_plugin_html
         )
         self.app.router.add_get("/msx/kiosk.html", self._handle_kiosk_html)
+        self.app.router.add_get("/msx/kiosk-content.json", self._handle_kiosk_content)
 
         # MSX content pages (native MSX JSON navigation)
         self.app.router.add_get("/msx/menu.json", self._handle_msx_menu)
@@ -385,12 +386,11 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 "parameter": f"menu:request:interaction:init@{prefix}/msx/plugin.html?v=8",
             }
         else:
-            # Kiosk mode - fullscreen panel with kiosk page
+            # Kiosk mode - fullscreen content page with embedded iframe
             hostname = host.split(":")[0]
             sendspin_server = f"http://{hostname}:8927"
-            kiosk_url = (
-                f"{prefix}/msx/kiosk.html"
-                f"?mode={kiosk_mode}"
+            kiosk_params = (
+                f"mode={kiosk_mode}"
                 f"&controls={str(show_controls).lower()}"
                 f"&sendspin_server={quote(sendspin_server, safe='')}"
                 f"&bridge={quote(prefix, safe='')}"
@@ -398,7 +398,7 @@ small {{ color: #666; display: block; margin-top: 4px; }}
             start_config = {
                 "name": "Music Assistant Kiosk",
                 "version": "1.0.6",
-                "parameter": f"panel:{kiosk_url}",
+                "parameter": f"content:{prefix}/msx/kiosk-content.json?{kiosk_params}",
             }
 
         return web.json_response(start_config)
@@ -543,6 +543,42 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 "Expires": "0",
             },
         )
+
+    async def _handle_kiosk_content(self, request: web.Request) -> web.Response:
+        """Return MSX content page with fullscreen iframe for kiosk mode."""
+        prefix = f"http://{request.host}"
+        hostname = request.host.split(":")[0]
+
+        # Get settings from query params
+        kiosk_mode = request.query.get("mode", MSX_KIOSK_MODE_STANDARD)
+        show_controls = request.query.get("controls", "true")
+        sendspin_server = request.query.get(
+            "sendspin_server", f"http://{hostname}:8927"
+        )
+
+        kiosk_url = (
+            f"{prefix}/msx/kiosk.html"
+            f"?mode={kiosk_mode}"
+            f"&controls={show_controls}"
+            f"&sendspin_server={quote(sendspin_server, safe='')}"
+            f"&bridge={quote(prefix, safe='')}"
+        )
+
+        # Return content page with single fullscreen iframe item
+        content = {
+            "type": "pages",
+            "headline": "",
+            "background": "black",
+            "pages": [{
+                "items": [{
+                    "type": "frame",
+                    "layout": "0,0,12,6",
+                    "offset": "0,0,0,0",
+                    "url": kiosk_url
+                }]
+            }]
+        }
+        return web.json_response(content)
 
     # --- MSX Content Pages (native MSX JSON) ---
 
