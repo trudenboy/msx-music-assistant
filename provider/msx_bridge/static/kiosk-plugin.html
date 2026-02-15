@@ -631,18 +631,15 @@
         this.handleRequest = function(dataId, data, callback) {
             logger.debug("handleRequest: " + dataId);
             if (dataId === "init") {
-                // Return content page for kiosk mode (fullscreen player)
-                // Need at least one selectable item
+                // Return menu structure like plugin.html does
                 callback({
-                    headline: "",
-                    header: { visible: false },
-                    items: [{
-                        type: "button",
-                        layout: "5,2,2,2",
-                        label: "Now Playing",
+                    name: "Music Assistant Kiosk",
+                    version: "1.0.0",
+                    headline: "Now Playing",
+                    menu: [{
                         icon: "music-note",
-                        selection: { important: false },
-                        action: "info:Kiosk Mode - Control playback from Music Assistant"
+                        label: "Kiosk Mode",
+                        data: BRIDGE_URL + "/msx/menu.json"
                     }]
                 });
             } else {
