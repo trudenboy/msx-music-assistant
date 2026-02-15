@@ -89,6 +89,34 @@ MA Group Command
 └─────────────┘   └─────────────┘
 ```
 
+### Group Stream Modes
+
+The `group_stream_mode` config option controls how audio is streamed to grouped players:
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| `independent` (default) | Each TV gets its own ffmpeg process | Maximum compatibility, slightly higher CPU |
+| `shared` | One ffmpeg process, multiple readers | Lower CPU usage, better for many TVs |
+
+```
+Independent Mode:
+┌─────────┐     ┌─────────┐     ┌─────────┐
+│ ffmpeg  │     │ ffmpeg  │     │ ffmpeg  │
+└────┬────┘     └────┬────┘     └────┬────┘
+     │               │               │
+     ▼               ▼               ▼
+   TV 1            TV 2            TV 3
+
+Shared Buffer Mode:
+            ┌─────────┐
+            │ ffmpeg  │
+            └────┬────┘
+                 │
+        ┌────────┼────────┐
+        ▼        ▼        ▼
+      TV 1     TV 2     TV 3
+```
+
 ### Limitations
 
 - **No audio stream synchronization** — each TV receives its own independent audio stream, so playback timing may differ by 100-500ms+ between devices
@@ -195,6 +223,35 @@ Currently implemented:
 In development:
 - MSX → MA: Position updates
 - MSX → MA: Playback state changes
+
+---
+
+## Sendspin Integration (Reserved)
+
+Infrastructure for clock-synchronized audio playback using the Sendspin protocol.
+
+### Current Status
+
+**Disabled** — The Sendspin plugin infrastructure is implemented but disabled. It requires Music Assistant core to support streaming audio to specific Sendspin player IDs, which is not yet available.
+
+### What's Implemented
+
+- `sendspin-plugin.html` — TVX Video Plugin with:
+  - Sync indicator UI (SYNC / CONNECTING / ERROR states)
+  - Dynamic Sendspin SDK loading via ES modules
+  - `SendspinMSXPlayer` class implementing TVX Video Plugin interface
+  - Connection handling with error fallback
+
+### Future Plans
+
+When MA core adds support for Sendspin player targeting:
+1. Enable `sendspin_enabled` config option
+2. Action URLs will switch from `audio:http://...` to `audio:plugin:http://.../sendspin-plugin.html`
+3. Clock-synchronized playback across multiple TVs
+
+### Why Sendspin?
+
+Sendspin protocol provides sample-accurate audio synchronization across devices. Unlike the current HTTP streaming approach (which has 100-500ms variance), Sendspin can achieve <10ms sync — ideal for multi-room setups where you can hear multiple speakers.
 
 ---
 

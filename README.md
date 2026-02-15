@@ -11,7 +11,9 @@ Stream your [Music Assistant](https://music-assistant.io/) library to Smart TVs 
 - **Library Browsing** — drill into album tracks, artist albums, playlist tracks, and search results
 - **Audio Playback** — stream audio to the TV through MA's queue system with PCM→ffmpeg encoding
 - **Browser Web Player** — lightweight browser-based player for kitchens, offices, kiosks, and mobile access (`http://<SERVER_IP>:8099/web/`)
-- **Player Grouping** — synchronized playback control across multiple TVs (experimental; no audio stream sync, each TV fetches its own stream)
+- **Player Grouping** — synchronized playback control across multiple TVs (experimental; configurable stream modes)
+- **Group Stream Modes** — Independent (each TV gets own ffmpeg) or Shared Buffer (one ffmpeg, less CPU)
+- **Remove Player** — delete MSX players from MA UI
 - **MSX Native Playlists** — seamless album/playlist playback with queue integration and TV remote navigation
 - **Dynamic Player Registration** — TVs register as MA players on-demand via device ID or IP, with automatic idle timeout cleanup
 - **Multi-TV Support** — each TV gets its own unique player, identified by MSX device ID
@@ -133,6 +135,7 @@ You can also visit `http://<YOUR_SERVER_IP>:8099/` in a browser for a status das
 | GET | `/` | Status dashboard (HTML) |
 | GET | `/msx/start.json` | MSX start configuration |
 | GET | `/msx/plugin.html` | MSX interaction plugin (device ID detection, WebSocket, menu) |
+| GET | `/msx/sendspin-plugin.html` | Sendspin TVX Video Plugin (reserved for future use) |
 | GET | `/msx/input.html` | MSX Input Plugin wrapper (search keyboard) |
 | GET | `/msx/input.js` | Input Plugin logic |
 | GET | `/msx/tvx-plugin-module.min.js` | TVX plugin module library |
@@ -147,6 +150,7 @@ You can also visit `http://<YOUR_SERVER_IP>:8099/` in a browser for a status das
 | GET | `/msx/artists.json` | Artists list with drill-down actions |
 | GET | `/msx/playlists.json` | Playlists list with drill-down actions |
 | GET | `/msx/tracks.json` | Tracks list with play actions |
+| GET | `/msx/recently-played.json` | Recently played tracks |
 | GET | `/msx/search-page.json` | Search page with Input Plugin keyboard trigger |
 | GET | `/msx/search-input.json?q=...` | Search results from Input Plugin keyboard |
 | GET | `/msx/search.json?q=...` | Search results (artists, albums, tracks) |
@@ -205,7 +209,7 @@ You can also visit `http://<YOUR_SERVER_IP>:8099/` in a browser for a status das
 
 ## Configuration
 
-The provider exposes six config entries in the MA UI:
+The provider exposes seven config entries in the MA UI:
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -215,6 +219,7 @@ The provider exposes six config entries in the MA UI:
 | `show_stop_notification` | `false` | Show confirmation dialog on MSX when stopping playback from MA |
 | `abort_stream_first` | `false` | When stopping: abort stream connection first, then send WebSocket stop (may help on some TVs) |
 | `enable_player_grouping` | `true` | Allow grouping multiple MSX TVs for synchronized playback (experimental) |
+| `group_stream_mode` | `independent` | How to stream to grouped players: `independent` (each TV gets own ffmpeg) or `shared` (one ffmpeg, multiple readers — less CPU) |
 
 ### Stop, Pause, and Resume
 
@@ -262,7 +267,7 @@ provider/msx_bridge/
 ├── provider.py        # MSXBridgeProvider(PlayerProvider) — lifecycle, dynamic player registration, idle timeout
 ├── player.py          # MSXPlayer(Player) — Smart TV as MA player, WebSocket push notifications
 ├── http_server.py     # MSXHTTPServer — aiohttp routes for MSX + API + WebSocket
-├── constants.py       # Config keys and defaults (6 entries)
+├── constants.py       # Config keys and defaults (7 entries)
 ├── manifest.json      # Provider metadata for MA
 ├── mappers.py         # MSX JSON mappers for content pages
 ├── models.py          # Pydantic models for MSX responses
@@ -271,6 +276,7 @@ provider/msx_bridge/
     │   ├── index.html          # Web player UI
     │   └── web.js              # Player logic
     ├── plugin.html             # MSX interaction plugin (device ID, WebSocket, menu)
+    ├── sendspin-plugin.html    # Sendspin TVX Video Plugin (reserved for future use)
     ├── input.html              # MSX Input Plugin wrapper (search keyboard)
     ├── input.js                # Input Plugin logic
     ├── tvx-plugin-module.min.js # TVX plugin module library

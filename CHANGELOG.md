@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Group Stream Modes** — new `group_stream_mode` config option: `independent` (default, each TV gets own ffmpeg process) or `shared` (one ffmpeg, multiple readers — less CPU usage)
+- **Sendspin Plugin Infrastructure** — `sendspin-plugin.html` TVX Video Plugin with sync indicator UI (disabled by default, reserved for future MA Sendspin integration)
+- **Remove Player** — `ProviderFeature.REMOVE_PLAYER` enabled, allowing deletion of MSX players from MA UI
+- **Recently Played** — `/msx/recently-played.json` content page and `/msx/playlist/recently-played.json` playlist endpoint
+- **Web Player Enhancements** — Sendspin mode infrastructure in web player (disabled), kiosk mode URL param `?kiosk=1`
 - **Instant Stop** — `notify_play_stopped` sends broadcast_stop + cancel_streams twice (same as Disable) so Stop in MA closes MSX immediately
 - **Pause → stop on MSX** — Pause calls `notify_play_stopped` to close the MSX player; Play calls `mass.player_queues.resume()` to re-send the current track
 - **Quick stop** — `POST /api/quick-stop/{player_id}` and dashboard button for direct HTTP control

@@ -13,18 +13,20 @@ Smart TV (MSX App) --HTTP--> MSXBridgeProvider (inside MA, port 8099) --internal
 ```
 
 **Provider** (`provider/msx_bridge/`): MA Player Provider with embedded HTTP server.
-- `__init__.py` — `setup()`, `get_config_entries()` (5 config entries), provider entry point
+- `__init__.py` — `setup()`, `get_config_entries()` (7 config entries), provider entry point
 - `provider.py` — `MSXBridgeProvider(PlayerProvider)`: manages lifecycle, dynamic player registration, idle timeout loop, WebSocket push notifications, starts HTTP server
 - `player.py` — `MSXPlayer(Player)`: represents a Smart TV as an MA player. Stores stream URL from `play_media()` for the TV to fetch via HTTP.
 - `http_server.py` — `MSXHTTPServer`: aiohttp server with routes for MSX bootstrap, library browsing, playback control, WebSocket, and stream proxy
-- `constants.py` — config keys and defaults (5 config entries: `http_port`, `output_format`, `player_idle_timeout`, `show_stop_notification`, `abort_stream_first`)
+- `constants.py` — config keys and defaults (7 config entries: `http_port`, `output_format`, `player_idle_timeout`, `show_stop_notification`, `abort_stream_first`, `enable_player_grouping`, `group_stream_mode`)
 - `manifest.json` — provider metadata for MA
 - `static/` — static files served by aiohttp:
   - `plugin.html` — MSX interaction plugin (detects device ID, opens WebSocket, builds menu)
+  - `sendspin-plugin.html` — Sendspin TVX Video Plugin (reserved for future use)
   - `input.html` — MSX Input Plugin wrapper (search keyboard)
   - `input.js` — Input Plugin logic
   - `tvx-plugin-module.min.js` — TVX plugin module library
   - `tvx-plugin.min.js` — TVX plugin library
+  - `web/` — Browser-based web player (index.html, web.js)
 
 ### Key Flows
 
@@ -130,7 +132,10 @@ python -c "from music_assistant.providers.msx_bridge import setup; print('OK')"
 - Status dashboard (`/`)
 - 58 unit tests (57 passed + 1 skipped) + 30 integration tests
 - `_format_msx_track()` helper reused across tracks, album tracks, playlist tracks, and search
-- 5 config entries: `http_port`, `output_format`, `player_idle_timeout`, `show_stop_notification`, `abort_stream_first`
+- 7 config entries: `http_port`, `output_format`, `player_idle_timeout`, `show_stop_notification`, `abort_stream_first`, `enable_player_grouping`, `group_stream_mode`
+- Browser web player (`/web`) with library browsing, playback controls, and keyboard shortcuts
+- Group stream modes: Independent (separate ffmpeg per TV) or Shared Buffer (one ffmpeg, multiple readers)
+- Sendspin plugin infrastructure (disabled, reserved for future MA Sendspin integration)
 - `on_player_disabled` override: does not unregister (player stays on Enable); still broadcasts stop for instant MSX close
 
 Next steps: integration testing with real MA server + MSX app, full MSX TypeScript plugin.
