@@ -632,18 +632,17 @@
             logger.debug("handleRequest: " + dataId);
             if (dataId === "init") {
                 // Return content page for kiosk mode (fullscreen player)
+                // Need at least one selectable item
                 callback({
-                    type: "pages",
                     headline: "",
                     header: { visible: false },
-                    pages: [{
-                        items: [{
-                            type: "default",
-                            layout: "0,0,12,6",
-                            label: "",
-                            enable: false,
-                            focus: false
-                        }]
+                    items: [{
+                        type: "button",
+                        layout: "5,2,2,2",
+                        label: "Now Playing",
+                        icon: "music-note",
+                        selection: { important: false },
+                        action: "info:Kiosk Mode - Control playback from Music Assistant"
                     }]
                 });
             } else {
