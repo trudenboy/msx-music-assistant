@@ -631,15 +631,33 @@
         this.handleRequest = function(dataId, data, callback) {
             logger.debug("handleRequest: " + dataId);
             if (dataId === "init") {
-                // Return menu structure like plugin.html does
+                // Return menu with single item that shows kiosk content
                 callback({
                     name: "Music Assistant Kiosk",
                     version: "1.0.0",
                     headline: "Now Playing",
                     menu: [{
                         icon: "music-note",
-                        label: "Kiosk Mode",
-                        data: BRIDGE_URL + "/msx/menu.json"
+                        label: "Now Playing",
+                        data: "request:interaction:kiosk-content"
+                    }]
+                });
+            } else if (dataId === "kiosk-content") {
+                // Return fullscreen content page
+                callback({
+                    headline: "",
+                    template: {
+                        type: "separate",
+                        layout: "0,0,0,0",
+                        icon: "blank",
+                        color: "msx-black"
+                    },
+                    items: [{
+                        type: "default",
+                        layout: "0,0,12,6",
+                        color: "msx-black",
+                        label: "♫ Waiting for playback...",
+                        enable: true
                     }]
                 });
             } else {
