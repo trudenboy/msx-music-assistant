@@ -387,7 +387,8 @@ small {{ color: #666; display: block; margin-top: 4px; }}
                 "parameter": f"menu:request:interaction:init@{prefix}/msx/plugin.html?v=8",
             }
         else:
-            # Kiosk mode - use interaction plugin with kiosk handler
+            # Kiosk mode - use content: with interaction plugin
+            # content: loads a content page, not a menu
             hostname = host.split(":")[0]
             sendspin_server = f"http://{hostname}:8927"
             kiosk_params = (
@@ -399,7 +400,7 @@ small {{ color: #666; display: block; margin-top: 4px; }}
             start_config = {
                 "name": "Music Assistant Kiosk",
                 "version": "1.0.6",
-                "parameter": f"menu:request:interaction:init@{prefix}/msx/kiosk-plugin.html?{kiosk_params}",
+                "parameter": f"content:request:interaction:init@{prefix}/msx/kiosk-plugin.html?{kiosk_params}",
             }
 
         return web.json_response(start_config)

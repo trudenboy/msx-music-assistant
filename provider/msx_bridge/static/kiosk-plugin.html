@@ -629,22 +629,23 @@
 
         // Handle data requests from MSX
         this.handleRequest = function(dataId, data, callback) {
-            logger.debug("handleRequest: " + dataId);
+            if (typeof TVXLogger !== "undefined" && !logger) {
+                logger = new TVXLogger();
+            }
+            if (logger) logger.debug("handleRequest: " + dataId);
+            
             if (dataId === "init") {
-                // Get bridge URL from URL params (before init() runs)
-                var bridgeUrl = TVXServices.urlParams.get("bridge", "") || 
-                                (location.protocol + "//" + location.host);
-                logger.debug("handleRequest init, bridgeUrl: " + bridgeUrl);
-                
-                // Return menu with URL to kiosk content JSON
+                // Return content object for kiosk mode (not menu!)
+                // This is loaded via content:request:interaction:init@...
                 callback({
-                    name: "Music Assistant Kiosk",
-                    version: "1.0.0",
                     headline: "Now Playing",
-                    menu: [{
+                    background: "black",
+                    items: [{
+                        type: "button",
+                        layout: "4,2,4,2",
+                        label: "Waiting for playback...",
                         icon: "music-note",
-                        label: "Now Playing",
-                        data: bridgeUrl + "/msx/kiosk-page.json"
+                        action: "info:Control playback from Music Assistant"
                     }]
                 });
             } else {
