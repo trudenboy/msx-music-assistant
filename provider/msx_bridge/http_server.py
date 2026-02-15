@@ -18,10 +18,17 @@ from music_assistant_models.media_items import AudioFormat
 from music_assistant.helpers.ffmpeg import get_ffmpeg_stream
 
 from .constants import (
+    CONF_MSX_KIOSK_CONTROLS,
+    CONF_MSX_KIOSK_MODE,
     CONF_SENDSPIN_ENABLED,
     CONF_SHOW_STOP_NOTIFICATION,
+    DEFAULT_MSX_KIOSK_CONTROLS,
+    DEFAULT_MSX_KIOSK_MODE,
     DEFAULT_SENDSPIN_ENABLED,
     DEFAULT_SHOW_STOP_NOTIFICATION,
+    MSX_KIOSK_MODE_DISABLED,
+    MSX_KIOSK_MODE_SENDSPIN,
+    MSX_KIOSK_MODE_STANDARD,
     MSX_PLAYER_ID_PREFIX,
     PLAYER_ID_SANITIZE_RE,
     PRE_BUFFER_BYTES,
@@ -127,6 +134,9 @@ class MSXHTTPServer:
         self.app.router.add_get("/msx/input.js", self._serve_static("input.js"))
         self.app.router.add_get(
             "/msx/sendspin-plugin.html", self._serve_static("sendspin-plugin.html")
+        )
+        self.app.router.add_get(
+            "/msx/kiosk-plugin.html", self._handle_kiosk_plugin_html
         )
 
         # MSX content pages (native MSX JSON navigation)
@@ -355,12 +365,40 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         """Return MSX start configuration."""
         host = request.host
         prefix = f"http://{host}"
-        # Version in URL forces MSX to refetch plugin after menu changes (avoids cache)
-        start_config = {
-            "name": "Music Assistant",
-            "version": "1.0.5",
-            "parameter": f"menu:request:interaction:init@{prefix}/msx/plugin.html?v=7",
-        }
+
+        # Check kiosk mode setting
+        kiosk_mode = str(
+            self.provider.config.get_value(CONF_MSX_KIOSK_MODE, DEFAULT_MSX_KIOSK_MODE)
+        )
+        show_controls = bool(
+            self.provider.config.get_value(
+                CONF_MSX_KIOSK_CONTROLS, DEFAULT_MSX_KIOSK_CONTROLS
+            )
+        )
+
+        if kiosk_mode == MSX_KIOSK_MODE_DISABLED:
+            # Normal mode with library navigation
+            start_config = {
+                "name": "Music Assistant",
+                "version": "1.0.6",
+                "parameter": f"menu:request:interaction:init@{prefix}/msx/plugin.html?v=8",
+            }
+        else:
+            # Kiosk mode - fullscreen player only
+            hostname = host.split(":")[0]
+            sendspin_server = f"http://{hostname}:8927"
+            kiosk_params = (
+                f"mode={kiosk_mode}"
+                f"&controls={str(show_controls).lower()}"
+                f"&sendspin_server={quote(sendspin_server, safe='')}"
+                f"&bridge={quote(prefix, safe='')}"
+            )
+            start_config = {
+                "name": "Music Assistant Kiosk",
+                "version": "1.0.6",
+                "parameter": f"menu:request:interaction:init@{prefix}/msx/kiosk-plugin.html?{kiosk_params}",
+            }
+
         return web.json_response(start_config)
 
     def _serve_static(self, filename: str) -> Any:
@@ -409,6 +447,52 @@ small {{ color: #666; display: block; margin-top: 4px; }}
         """Serve input.html and ensure player is registered when Search is opened."""
         await self._ensure_player_for_request(request)
         return web.FileResponse(STATIC_DIR / "input.html")
+
+    async def _handle_kiosk_plugin_html(self, request: web.Request) -> web.Response:
+        """Serve kiosk-plugin.html with configuration injected."""
+        path = STATIC_DIR / "kiosk-plugin.html"
+        content = path.read_text(encoding="utf-8")
+
+        # Get kiosk mode settings
+        kiosk_mode = str(
+            self.provider.config.get_value(CONF_MSX_KIOSK_MODE, DEFAULT_MSX_KIOSK_MODE)
+        )
+        show_controls = bool(
+            self.provider.config.get_value(
+                CONF_MSX_KIOSK_CONTROLS, DEFAULT_MSX_KIOSK_CONTROLS
+            )
+        )
+        host = request.host.split(":")[0]
+        sendspin_server = f"http://{host}:8927"
+        bridge_url = f"http://{request.host}"
+
+        # Inject configuration into JavaScript
+        content = content.replace(
+            'var KIOSK_MODE = "standard";',
+            f'var KIOSK_MODE = "{kiosk_mode}";',
+        )
+        content = content.replace(
+            "var SHOW_CONTROLS = true;",
+            f"var SHOW_CONTROLS = {str(show_controls).lower()};",
+        )
+        content = content.replace(
+            'var SENDSPIN_SERVER = "";',
+            f'var SENDSPIN_SERVER = "{sendspin_server}";',
+        )
+        content = content.replace(
+            'var BRIDGE_URL = "";',
+            f'var BRIDGE_URL = "{bridge_url}";',
+        )
+
+        return web.Response(
+            text=content,
+            content_type="text/html",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
 
     async def _handle_web_app(self, request: web.Request) -> web.Response:
         """Serve the kiosk web player SPA (browser-based, no MSX app needed)."""
